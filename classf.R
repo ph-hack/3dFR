@@ -705,11 +705,12 @@ ICPClassf <- function(trainingDir, testDir, closest="", method="election", by="e
   (list(accuracy=corrects*100/M, corrects=corrects, confusion=confusion)) #returns the percentage of correct classifications
 }
 
-kNeigbourSelector <- function(trainingDir, training=0, testDir, test=0, toFile="", method="euclidean", amount=200, range=0, logFile=""){
+kNeigbourSelector <- function(trainingDir, testDir, training=0, test=0, toFile="", method="euclidean", amount=200, range=0, logFile="", useFisher=TRUE){
   
   if(length(training) == 1){
     training <- dir(trainingDir)
-    training <- training[-which(my.strsplit(training, "[.]", 0) == "jpg")]
+    if(!useFisher)
+      training <- training[-which(my.strsplit(training, "[.]", 0) == "jpg")]
   }
   else{
     
@@ -719,7 +720,8 @@ kNeigbourSelector <- function(trainingDir, training=0, testDir, test=0, toFile="
   
   if(length(test) == 1){
     test <- dir(testDir)
-    test <- test[-which(my.strsplit(test, "[.]", 0) == "jpg")]
+    if(!useFisher)
+      test <- test[-which(my.strsplit(test, "[.]", 0) == "jpg")]
   }
   else{
     
@@ -741,14 +743,22 @@ kNeigbourSelector <- function(trainingDir, training=0, testDir, test=0, toFile="
     start <- getTime()
     
     #reads the ith test image
-    testImg <- readImageData(paste(testDir, test[i], sep=""))
+    testImg <- 0
+    if(useFisher)
+      testImg <- scan(paste(testDir, test[j], sep=""), quiet=TRUE)
+    else
+      testImg <- readImageData(paste(testDir, test[i], sep=""))
     
     dists <- rep(0, m) #initializes the vector with the distances
     
     for(j in 1:m){ #for each training image
       
       #reads the jth training image
-      trainingImg <- readImageData(paste(trainingDir, training[j], sep=""))
+      trainingImg <- 0
+      if(useFisher)
+        trainingImg <- scan(paste(trainingDir, training[j], sep=""), quiet=TRUE)
+      else
+        trainingImg <- readImageData(paste(trainingDir, training[j], sep=""))
       
       #computes the distance between the ith test sample and the jth training sample
       if(method == "cosine"){

@@ -3,20 +3,36 @@ library(jpeg) #open jpg images
 library(stinepack) #interpolate curves
 library(abind) #combine multi-dimensional arrays
 
+# Writes the weights into the specified file. ----
+# input:
+#   weights = a list containing for each class, a weight for each descriptor
+#   file = a file path
+# output:
+#   none, the file will be created or overwritten with the given weights
 write.weights <- function(weights, file){
   
+  #gets the number of classes' weights
   n <- length(weights)
+  #gets the classes' names
   classes <- names(weights)
   
+  #for each class...
   for(i in 1:n){
-    
+    #gets the number of descriptors
     col <- length(weights[[i]])
+    #writes the name of the class into the file
     write(classes[i], file, 1, append=TRUE)
+    #writes the 'col' weights into the file just after the class name
     write(weights[[i]], file, col, TRUE)
   }
   cat("Done!\n")
 }
 
+# Reads the weights from the given file ----
+# input:
+#   file = a file path where is the weights
+# ouput:
+#   a list containing for each class, each descriptor's weights
 read.weights <- function(file){
   
   lines <- readLines(file)
@@ -118,7 +134,7 @@ outlierCorrection4 <- function(img, meanImg, threshold=0, file="", progress=FALS
   (unoutlied)
 }
 
-# Splits a given string 'str' by a pattern 'split' and returns
+# Splits a given string 'str' by a pattern 'split' and returns ----
 # the 'index'th part of the splitting.
 # intput:
 #   str = either a string or a vector of strings
@@ -169,7 +185,7 @@ my.strsplit <- function(str, split, index){
   }
 }
 
-# Generates a mean face image with the training set.
+# Generates a mean face image with the training set ----
 # input:
 #   trainingDir = a string containing the path to the training directory
 #   file = a string with the file path where the resulting image shall be saved.
@@ -249,7 +265,7 @@ meanFace <- function(trainingDir, file="", isDir=TRUE, progress=TRUE){
   (meanImg)
 }
 
-# Uses the transformation matrix given by PhD. Clement Creusot
+# Uses the transformation matrix given by PhD. Clement Creusot ----
 # by ICP with the first face to align all faces.
 # input:
 #   file = a string containing the file path to the ABS file
@@ -320,7 +336,7 @@ registerFaces <- function(file, transf_data, ldmk="", progress=TRUE){
   (list(points=face, ldmk=ldmk))
 }
 
-# Reads the data of the registration file that contains
+# Reads the data of the registration file that contains ----
 # the crop and transformations information
 # input:
 #   file = a string containing the file path to the TXT file which contains all transformation informations
@@ -355,44 +371,50 @@ getTransfData <- function(file){
   (data)
 }
 
-# Computes the errors for each training sample and their closest----
+# Computes the errors for each training sample and their closest ----
 computeErrorsByCurves <- function(trainingDir, closest, nClosest, nDescriptors, toFile="", meanImgs="", ldmk="", method="error", maxIter=10, 
                                   minIter=5, pSample=0.33, range=0, progress=TRUE){
-  
+  #gets the training file names
   training <- dir(trainingDir)
   
+  #if the range is given, gets only the samples within the range
   if(range[1] != 0)
     training <- training[range[1]:range[2]]
   
-  N <- length(training)
-  M <- nDescriptors
+  N <- length(training) #gets the number of training samples
+  M <- nDescriptors #gets the number of descriptors
   
+  #initializes the 3D array of errors with zeros
+  #(the 1st dimension is the training samples, the 2nd dimension is the closest, the 3rd dimension is the descriptors)
   errors <- array(rep(0, N*nClosest*M), c(N, nClosest, M))
   
+  #for each training sample
   for(i in 1:N){
-    
+    #reads the ith training sample
     img1 <- readMainLines(paste(trainingDir, training[i], sep=""), "list")
+    #gets the number of descriptors of the ith sample
     M <- length(img1)
     
+    #gets all closest samples of the ith training sample
     closestImg <- readLines(concatenate(c(closest, "cl_", getFaceID(training[i]), ".txt")))
-    
+    #gets only the 'nClosest'th closest samples
     closestImg <- closestImg[2:(nClosest+1)]
-    
+    #turns them into the face sample name
     closestImg <- getFaceID(closestImg)
-    
+    #gets the number of closest samples
     n <- length(closestImg)
+    #intializes a cronometer
     start <- getTime()
-        
+    
+    #for each closest sample...
     for(j in 1:n){
-      
+      #reads the jth closest sample
       img2 <- readMainLines(concatenate(c(trainingDir, closestImg[j], ".lines")), "list")
-      
+      #reads the corresponding mean face sample
       meanImg <- getMainLines(readImageData(concatenate(c(meanImgs, getPersonID(closestImg[j]), "d000.mean.jpg.dat"))),
                               readLandmark(concatenate(c(ldmk, closestImg[j], ".ldmk"))))
       
-      #cat("with closest ", closestImg[j], "\n")
-      
-      #computes the distance between the ith test sample and the jth training sample
+      #computes the distance between the ith training sample and the jth closest sample
       if(method == "error"){
         
         for(k in 1:M){
@@ -419,7 +441,7 @@ computeErrorsByCurves <- function(trainingDir, closest, nClosest, nDescriptors, 
   (errors)
 }
 
-# Analyzes the descriptors and weights them for each person----
+# Analyzes the descriptors and weights them for each person ----
 # according to its discrimination power
 familiarityWeights <- function(trainingDir, closest, nClosest, nDescriptors, errors=0, toFile="", meanImgs="", ldmk="", method="error", maxIter=10, range=0, progress=TRUE){
   
@@ -464,8 +486,6 @@ familiarityWeights <- function(trainingDir, closest, nClosest, nDescriptors, err
     closestImg <- getPersonID(closestImg)
     
     for(j in 1:nClosest){
-      
-      #cat(imgsClasses[i], " = ", closestImg[j], "\n")
       
       #if we have a match classXclass...
       if(imgsClasses[i] == closestImg[j]){
@@ -621,8 +641,8 @@ graphizeErrorsOfClass <- function(errors, the_class, training, closest, nClosest
     }
   else{
     
-    points(-10, matchError[descriptor]/nMatches, col="green", pch=6)
-    points(-10, misMatchError[descriptor]/nMisMatches, col="orange", pch=2)      
+    points(-20, matchError[descriptor]/nMatches, col="green", pch=6)
+    points(-20, misMatchError[descriptor]/nMisMatches, col="orange", pch=2)      
   }
 }
 
