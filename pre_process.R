@@ -527,7 +527,7 @@ familiarityWeights <- function(trainingDir, closest, nClosest, nDescriptors, err
   (classWeights)
 }
 
-graphizeErrorsOfClass <- function(errors, the_class, training, closest, nClosest=100, descriptor=0, progress=TRUE){
+graphizeErrorsOfClass <- function(errors, the_class, training, closest, nClosest=100, descriptor=0, maxError=0, progress=TRUE){
   
   dims <- dim(errors)
   error_classes <- getPersonID(training)
@@ -541,7 +541,9 @@ graphizeErrorsOfClass <- function(errors, the_class, training, closest, nClosest
   misMatchError <- rep(0, dims[3])
   nMisMatches <- 0
   
-  maxError <- max(errors)
+  if(maxError == 0)
+    maxError <- max(errors[samplesOfClass,,])
+  
   if(descriptor == 0)
     plot(c(0,dims[3]), c(0, maxError), col="white")
   else
