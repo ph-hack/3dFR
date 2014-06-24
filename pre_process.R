@@ -556,13 +556,15 @@ graphizeErrorsOfClass <- function(errors, the_class, training, closest, nClosest
   error_classes <- error_classes[samplesOfClass]
   training <- training[samplesOfClass]
   
+  errors <- errors[samplesOfClass,,]
+  
   matchError <- rep(0, dims[3])
   nMatches <- 0
   misMatchError <- rep(0, dims[3])
   nMisMatches <- 0
   
   if(maxError == 0)
-    maxError <- max(errors[samplesOfClass,,])
+    maxError <- max(errors)
   
   if(descriptor == 0)
     plot(c(0,dims[3]), c(0, maxError), col="white")
@@ -575,6 +577,7 @@ graphizeErrorsOfClass <- function(errors, the_class, training, closest, nClosest
     closestImg <- readLines(concatenate(c(closest, "cl_", getFaceID(training[i]), ".txt")))
     #removes the first one and keeps only the next 'nClosest'th 
     closestImg <- closestImg[2:(nClosest+1)]
+    closestIDs <- closestImg
     #gets the class for each of the closest
     closestImg <- getPersonID(closestImg)
     
@@ -628,6 +631,8 @@ graphizeErrorsOfClass <- function(errors, the_class, training, closest, nClosest
         }
       }
     }
+    
+    cat(closestIDs[which.min(errors[i,,1])], "\n")
   
     if(progress)
       cat("\ncomputing classes weights: ", i*100/N, "%\n")
