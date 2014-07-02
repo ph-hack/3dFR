@@ -3,9 +3,7 @@
 #, the folder where the eigenVectors will be saved in ('eigenDir')
 #, the folder where the means will be saved in ('meanDir')
 # and the amount of energy which must be kept with the dimensionality reduction
-eigenVectors <- function(directory="", eigenDir="", meanDir="", energy=0.99){
-  imgs <- dir(directory)
-  imgs <- imgs[-which(my.strsplit(imgs, "[.]", 0) == "jpg")]
+eigenVectors <- function(directory, imgs, eigenDir="", meanDir="", energy=0.99){
   m <- length(imgs)
   
   #reads the first training sample
@@ -103,10 +101,8 @@ findMostSignificantDimensions <- function(values, energy=0.99){
 # when 'ignDim' is one number, the 'ignDim' 1st eigenvectors will be ignored
 # when 'ignDim' is two numbers, the interval between 'ignDim'[1] and 'ignDim'[2] wont be ignored
 # By default all folders are set to the current R directory
-mapWithEigenVectors <- function(imgsDir="", meanDir="", mapDir="", eigenDir="", ignDim=0){
+mapWithEigenVectors <- function(imgsDir, imgs, meanDir="", mapDir="", eigenDir="", ignDim=0){
   
-  imgs <- dir(imgsDir) #gets the images' filenames
-  imgs <- imgs[-which(my.strsplit(imgs, "[.]", 0) == "jpg")]
   m <- length(imgs) #gets the number of images
   
   eigens <- dir(eigenDir) #gets the eigenVectors' filenames]
