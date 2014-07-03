@@ -1,3 +1,5 @@
+library(MASS) #for LDA
+
 # generates and saves the eigenVectors in TXT ##########################################################################
 # it needs the folder where the images are, if the R isn't working in the images' folder ('directory')
 #, the folder where the eigenVectors will be saved in ('eigenDir')
@@ -24,9 +26,12 @@ eigenVectors <- function(directory, imgs, eigenDir="", meanDir="", energy=0.99){
     
     cat("building training matrix: ", (j*100/m), "%\n")
   }
+  cat("Matrix dim: ", dim(trainingMatrix), "\n")
   
   print("applying PCA...")
   pcaResult <- pca(trainingMatrix, energy)
+  
+  cat("resultining nDim: ", pcaResult$nDim, "\n")
   
   #saves the best eigenVectors as images
   for(i in 1:pcaResult$nDim){
@@ -36,7 +41,7 @@ eigenVectors <- function(directory, imgs, eigenDir="", meanDir="", energy=0.99){
     if(eigenDir == "") eigenDir = directory
     write(eigenVector, concatenate(c(eigenDir, "eigenFace", as.character(i), ".txt")), sep=" ")
     
-    cat("saving eigenFaces: ", (i*100/pcaResult$nDim), "%\n")
+    #cat("saving eigenFaces: ", (i*100/pcaResult$nDim), "%\n")
   }
   
   #saves the mean
@@ -92,6 +97,19 @@ findMostSignificantDimensions <- function(values, energy=0.99){
   (i)
 }
 
+getEigenNumber <- function(eigen){
+  
+  N <- length(eigen)
+  number <- rep(0, N)
+  
+  for(i in 1:N){
+    
+    number[i] <- as.numeric(strsplit(eigen[i], "[A-z]+")[[1]][2])
+  }
+  
+  (number)
+}
+
 # maps and save the images with the eigenVectors ########################################################################
 # it needs the folder of the images ('imgsDir')
 #, the folder containing the 'means.txt' file with the dimensions means
@@ -107,11 +125,11 @@ mapWithEigenVectors <- function(imgsDir, imgs, meanDir="", mapDir="", eigenDir="
   
   eigens <- dir(eigenDir) #gets the eigenVectors' filenames]
   if(length(ignDim) == 1){
-    eigens <- eigens[which(getPersonId(eigens) > ignDim)]
+    eigens <- eigens[which(getEigenNumber(eigens) > ignDim)]
   }
   else{
-    eigens <- eigens[which(getPersonId(eigens) >= ignDim[1])]
-    eigens <- eigens[which(getPersonId(eigens) <= ignDim[2])]
+    eigens <- eigens[which(getEigenNumber(eigens) >= ignDim[1])]
+    eigens <- eigens[which(getEigenNumber(eigens) <= ignDim[2])]
   }
   d <- length(eigens) #gets the number of dimensions
   
@@ -145,7 +163,7 @@ mapWithEigenVectors <- function(imgsDir, imgs, meanDir="", mapDir="", eigenDir="
       newImg[k] <- (eigenFace %*% img)[1,1] #maps
     }
     #saves the new image
-    write(newImg, paste(mapDir, paste("mapped", paste(as.character(strsplit(imgs[i], "[.]")[[1]][1]), ".txt", sep=""), sep=""), sep=""), sep=" ")
+    write(newImg, paste(mapDir, paste(as.character(strsplit(imgs[i], "[.]")[[1]][1]), ".txt", sep=""), sep=""), sep=" ")
     
     print(i*100/m) #prints the progress
   }
