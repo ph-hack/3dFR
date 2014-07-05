@@ -729,6 +729,13 @@ kNeigbourSelector <- function(trainingDir, testDir, training=0, test=0, toFile="
     test <- concatenate(list(test, ".jpg.dat"))
   }
   
+  trainingNames <- training
+  testNames <- test
+  if(useFisher){
+    trainingNames <- my.strsplit(trainingNames, "mapped", 2)
+    testNames <- my.strsplit(testNames, "mapped", 2)
+  }
+  
   if(length(range) == 2)
     test <- test[range[1]:range[2]]
   
@@ -745,7 +752,7 @@ kNeigbourSelector <- function(trainingDir, testDir, training=0, test=0, toFile="
     #reads the ith test image
     testImg <- 0
     if(useFisher)
-      testImg <- scan(paste(testDir, test[j], sep=""), quiet=TRUE)
+      testImg <- scan(paste(testDir, test[i], sep=""), quiet=TRUE)
     else
       testImg <- readImageData(paste(testDir, test[i], sep=""))
     
@@ -786,7 +793,7 @@ kNeigbourSelector <- function(trainingDir, testDir, training=0, test=0, toFile="
     }
     
     cl <- rep("", amount)
-    
+        
     for(j in 1:amount){ #if it to just look for the closests vector
       #takes the index of the closest image vector
       k <- which.min(dists)
@@ -794,7 +801,9 @@ kNeigbourSelector <- function(trainingDir, testDir, training=0, test=0, toFile="
         k <- which.max(dists)
       }
       
-      cl[j] <- getFaceID(training[k])
+      #cat("k=", k, " training[k]=", trainingNames[k], "\n")
+      
+      cl[j] <- getFaceID(trainingNames[k])
       
       if((method == "cosine") || (method == "dice"))
         dists[k] <- -100
@@ -805,10 +814,10 @@ kNeigbourSelector <- function(trainingDir, testDir, training=0, test=0, toFile="
     closest[[i]] <- cl
     
     if(toFile != "")
-      write(cl, concatenate(c(toFile, "_", getFaceID(test[i]), ".txt")), 1)
+      write(cl, concatenate(c(toFile, "_", getFaceID(testNames[i]), ".txt")), 1)
     
     cat(i*100/M, "%\n") #prints the progress
-    cat("Testing ", test[i], ": ", crono.end(start), ", ", i*100/M, "%\n", file=logFile, append=TRUE)
+    cat("Testing ", testNames[i], ": ", crono.end(start), ", ", i*100/M, "%\n", file=logFile, append=TRUE)
   }
   (closest) #returns the 'amount' closest images
 }

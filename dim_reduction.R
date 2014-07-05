@@ -289,7 +289,8 @@ mapWithLDAVectors <- function(imgsDir="", mapDir="", eigenDir=""){
   eigenVectors <- matrix(scan(paste(eigenDir, eigens[1], sep=""), quiet=TRUE), nrow=1)
   for(j in 2:d){
     #reads the jth eigenFace
-    eigenVectors <- rbind(eigenVectors, matrix(as.numeric(scan(paste(eigenDir, eigens[j], sep=""), what=complex(), quiet=TRUE)), nrow=1))
+    #eigenVectors <- rbind(eigenVectors, matrix(as.numeric(scan(paste(eigenDir, eigens[j], sep=""), what=complex(), quiet=TRUE)), nrow=1))
+    eigenVectors <- rbind(eigenVectors, matrix(as.numeric(scan(paste(eigenDir, eigens[j], sep=""), quiet=TRUE)), nrow=1))
     cat("reading lda vectors: ", (j*100/d), "%\n")
   }
   print("EigenVectors read...\n")
@@ -298,12 +299,12 @@ mapWithLDAVectors <- function(imgsDir="", mapDir="", eigenDir=""){
     
     #reads the jth training image
     img <- 0
-    if(strsplit(imgs[j], "[.]")[[1]][2] == "jpg"){
-      img <- t(readJPEG(paste(imgsDir, imgs[j], sep="")))
+    if(strsplit(imgs[i], "[.]")[[1]][2] == "jpg"){
+      img <- t(readJPEG(paste(imgsDir, imgs[i], sep="")))
       dim(img) <- c(length(img[,1]) * length(img[1,]), 1) #converts it to a matrix with 1 column
     }
     else{
-      img <- scan(paste(imgsDir, imgs[j], sep=""), quiet=TRUE)
+      img <- scan(paste(imgsDir, imgs[i], sep=""), quiet=TRUE)
       dim(img) <- c(length(img), 1) #converts it to a matrix with 1 column
     }
     
