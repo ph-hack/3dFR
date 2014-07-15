@@ -542,17 +542,25 @@ familiarityWeights <- function(trainingDir, closest, nClosest, nDescriptors, err
     if(!singleton[[cl]]){
       
       for(i in 1:M){ #for each descriptor
-        sep <- computeSeparability(list(mean=cM[i], sd=cD[i]), list(mean=ncM[i], sd=ncD[i]))
+        sep <- computeSeparability(list(mean=cM[i], sd=cD[i]), list(mean=ncM[i], sd=ncD[i]), 1)
         #if the mean of errors of the matches is smaller than the mean of errors of the mismatches...
-        if(cM[i] < ncM[i])
+        if(cM[i] < ncM[i]){
           #computes the weight normally
-          classWeights[[cl]][i] <- 3^(cM[i]/(7*sep) - (sep)^2)
-        
+          classWeights[[cl]][i] <- 3^(cM[i]/(7*sep + 0.5) - (sep)^2)
+          
+          if(cl == "04222")
+            cat("line ", i, " normal\n")
+        }
         #if it isn't...
         else{
           
           classWeights[[cl]][i] <- 3^(cM[i]/(5) + (sep)^2)
+          if(cl == "04222")
+            cat("line ", i, " mean error\n")
         }
+        
+        if(cl == "04222" && classWeights[[cl]][i] > 10)
+          cat("too big!\n")
       }
     }
     #if it is zero...
@@ -574,8 +582,10 @@ familiarityWeights <- function(trainingDir, closest, nClosest, nDescriptors, err
 #' @aliases computeSeparability
 #' @param d1 = A list containing the mean and the standard deviation, representing the 1st data set.
 #' @param d2 = A list representing the 2nd data set.
+#' @param reference = 0 if the reference data size should be picked automatically, 1 if the
+#'                    shall be 'd1', 2 if the reference shall be 'd2'
 #' @author Paulo Hack, Msc student at UNICAMP.
-computeSeparability <- function(d1, d2){
+computeSeparability <- function(d1, d2, reference=0){
   
   #computes the dimensions ranges of each data set
   range1 <- list(min = d1$mean - d1$sd, max = d1$mean + d1$sd)
@@ -599,7 +609,13 @@ computeSeparability <- function(d1, d2){
   #checks which range is smaller, that one will be used as size reference
   if(commonRange$size > 0){
     
-    if(range1$size < range2$size)
+    if(reference == 0){
+      if(range1$size < range2$size)
+        separability <- 1 - commonRange$size/range1$size
+      else
+        separability <- 1 - commonRange$size/range2$size
+    }
+    else if(reference == 1)
       separability <- 1 - commonRange$size/range1$size
     else
       separability <- 1 - commonRange$size/range2$size
