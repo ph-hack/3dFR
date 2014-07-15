@@ -462,19 +462,23 @@ familiarityWeights <- function(trainingDir, closest, nClosest, nDescriptors, err
   imgsClasses <- getPersonID(training) #the classes of each training sample
   classes <- unique(imgsClasses) #the classes
   Nclasses <- length(classes) #the number of classes
-  numberOfMatches <- list() #the list containing the number of matches classXclass for each class
-  classWeights <- list() #the list containing the weights for each descriptor for each class
-  notClassWeights <- list() #the list containing the sum of errors for the matches classXnotClass for each class
-  numberOfMisMatches <- list() #the list containing the number of matches classXnotClass for each class
+  classMeans <- list() #the list containing the means for each descriptor for each class
+  classDev <- list() #the list containing the standard deviation for each descriptor for each class
+  notClassMeans <- list() #the list containing the means for the matches classXnotClass for each class
+  notClassDev <- list() #the list containing the standard deviation for each descriptor for each mismatch
+  classWeights <- list()
+  singleton <- list()
   
   #maxError <- max(errors)
   
   #initializes the lists with zeros
   for(l in 1:Nclasses){
+    classMeans[[classes[l]]] <- rep(0, M)
+    classDev[[classes[l]]] <- rep(0, M)
+    notClassMeans[[classes[l]]] <- rep(0, M)
+    notClassDev[[classes[l]]] <- rep(0, M)
     classWeights[[classes[l]]] <- rep(0, M)
-    numberOfMatches[[classes[l]]] <- 0
-    numberOfMisMatches[[classes[l]]] <- 0
-    notClassWeights[[classes[l]]] <- rep(0, M)
+    singleton[[classes[l]]] <- FALSE
   }
   
   for(i in 1:N){
@@ -485,26 +489,42 @@ familiarityWeights <- function(trainingDir, closest, nClosest, nDescriptors, err
     #gets the class for each of the closest
     closestImg <- getPersonID(closestImg)
     
-    for(j in 1:nClosest){
+    #retrieves the indexes of the closest of the same class as the ith sample
+    matches <- which(imgsClasses[i] == closestImg)
+    
+    notClassErrors <- 0
+    
+    if(length(matches) != 0){
       
-      #if we have a match classXclass...
-      if(imgsClasses[i] == closestImg[j]){
-        for(k in 1:M){
-          #sums the errors
-          classWeights[[imgsClasses[i]]][k] <- classWeights[[imgsClasses[i]]][k] + errors[i,j,k]
-        }
-        #counts the occurence
-        numberOfMatches[[imgsClasses[i]]] <- numberOfMatches[[imgsClasses[i]]] + 1
+      #initializes the matrix that will contain the errors for each descriptor for the ith class match
+      classErrors <- errors[i, matches,]
+      
+      if(is.null(dim(classErrors))){
+        classErrors <- matrix(classErrors, nrow=1)
+        classErrors <- rbind(classErrors, classErrors)
       }
-      else{ #if we have a match classXnotClass...
-        for(k in 1:M){
-          #sums the errors
-          notClassWeights[[imgsClasses[i]]][k] <- notClassWeights[[imgsClasses[i]]][k] + errors[i,j,k]
-        }
-        #counts the occurence
-        numberOfMisMatches[[imgsClasses[i]]] <- numberOfMisMatches[[imgsClasses[i]]] + 1
-      }
+      
+      #computes the mean for each descriptor
+      classMeans[[imgsClasses[i]]] <- colMeans(classErrors)
+      
+      #computes the standard deviation for each descriptor
+      classDev[[imgsClasses[i]]] <- apply(classErrors, 2, sd)
+      
+      #initializes the matrix that will contain the errors for each descriptor for the ith class mismatch
+      notClassErrors <- errors[i, -matches,]
     }
+    else{
+      singleton[[imgsClasses[i]]] <- TRUE
+      
+      #initializes the matrix that will contain the errors for each descriptor for the ith class mismatch
+      notClassErrors <- errors[i, ,]
+    }
+    
+    #computes the mean for each descriptor
+    notClassMeans[[imgsClasses[i]]] <- colMeans(notClassErrors)
+    
+    #computes the standard deviation for each descriptor
+    notClassDev[[imgsClasses[i]]] <- apply(notClassErrors, 2, sd)
     
     if(progress)
       cat("\ncomputing classes weights: ", i*100/N, "%\n")
@@ -512,31 +532,32 @@ familiarityWeights <- function(trainingDir, closest, nClosest, nDescriptors, err
   
   for(cl in classes){
     
-    nM <- numberOfMatches[[cl]]
-    nMM <- numberOfMisMatches[[cl]]
-    cW <- classWeights[[cl]]
-    ncW <- notClassWeights[[cl]]
+    cM <- classMeans[[cl]]
+    cD <- classDev[[cl]]
+    ncM <- notClassMeans[[cl]]
+    ncD <- notClassDev[[cl]]
     
     #cat("class errors:\t", cW/nC, "\nnot-Class errors:\t", ncW/tnC, "\n")
     #if the number of matches classXclass isn't zero...
-    if(nM != 0){
+    if(!singleton[[cl]]){
       
       for(i in 1:M){ #for each descriptor
+        sep <- computeSeparability(list(mean=cM[i], sd=cD[i]), list(mean=ncM[i], sd=ncD[i]))
         #if the mean of errors of the matches is smaller than the mean of errors of the mismatches...
-        if(cW[i]/nM < ncW[i]/nMM)
+        if(cM[i] < ncM[i])
           #computes the weight normally
-          classWeights[[cl]][i] <- (1.5*ncW[i]/nMM) * (cW[i]/nM)/(2*ncW[i]/nMM - cW[i]/nM)
+          classWeights[[cl]][i] <- 3^(cM[i]/(7*sep) - (sep)^2)
         
         #if it isn't...
         else{
           
-          classWeights[[cl]][i] <- 3^(4*cW[i]/nM-4*ncW[i]/nMM)+(1.5*ncW[i]/nMM)-1
+          classWeights[[cl]][i] <- 3^(cM[i]/(5) + (sep)^2)
         }
       }
     }
     #if it is zero...
     else{
-      classWeights[[cl]] <- - 5^(2*ncW/nMM)
+      classWeights[[cl]] <- 4/(ncM+1/3) + 8
       cat("Singleton\t", cl, "\n")
     }
     
@@ -545,6 +566,48 @@ familiarityWeights <- function(trainingDir, closest, nClosest, nDescriptors, err
   }
   
   (classWeights)
+}
+
+#' Computes a separability measure between two data sets.
+#' The data sets are represented by two statiscal measures: mean and standard deviation.
+#' ---------------------------------------------------------------------------------------
+#' @aliases computeSeparability
+#' @param d1 = A list containing the mean and the standard deviation, representing the 1st data set.
+#' @param d2 = A list representing the 2nd data set.
+#' @author Paulo Hack, Msc student at UNICAMP.
+computeSeparability <- function(d1, d2){
+  
+  #computes the dimensions ranges of each data set
+  range1 <- list(min = d1$mean - d1$sd, max = d1$mean + d1$sd)
+  range2 <- list(min = d2$mean - d2$sd, max = d2$mean + d2$sd)
+  
+  #computes the size of each range
+  range1$size <- range1$max - range1$min
+  range2$size <- range2$max - range2$min
+  
+  #cat("size1=", range1$size, " size2=", range2$size, "\n")
+  
+  ranges <- list(range1, range2)
+  
+  commonRange <- list(min = 0, max = 0, size = 0)
+  commonRange$min = ranges[[which.max(c(range1$min, range2$min))]]$min
+  commonRange$max = ranges[[which.min(c(range1$max, range2$max))]]$max
+  commonRange$size = commonRange$max - commonRange$min
+  
+  separability <- 0
+  
+  #checks which range is smaller, that one will be used as size reference
+  if(commonRange$size > 0){
+    
+    if(range1$size < range2$size)
+      separability <- 1 - commonRange$size/range1$size
+    else
+      separability <- 1 - commonRange$size/range2$size
+  }
+  else
+    separability <- 1 - commonRange$size
+  
+  (separability)
 }
 
 graphizeErrorsOfClass <- function(errors, the_class, training, closest, nClosest=100, descriptor=0, maxError=0, progress=TRUE){
