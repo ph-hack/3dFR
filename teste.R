@@ -19,7 +19,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   reference <- takeNoneFaceOut(reference)
   target <- takeNoneFaceOut(target)
   
-  if(commonDomain(reference, target) == 0)
+  if(commonDomain(reference, target, TRUE) == 0)
     return(list(target = target, error = m, energyTotal = m, energyMean = m))
   
   #remembers the prime target
@@ -38,7 +38,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   target <- interpolateXinteger(target)
   
   #checks whether the curves got too far
-  if(commonDomain(reference, target) >= threshold){
+  if(commonDomain(reference, target, TRUE) >= threshold){
     
     #if they didn't, measures the distances for each point
     distances <- dist.p2p(reference, target)
@@ -118,7 +118,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     distances <- dist.p2p(reference, target)
     
     #checks whether the curves got too far
-    if(commonDomain(reference, target) >= threshold)
+    if(commonDomain(reference, target, TRUE) >= threshold)
       #if they didn't, measures the error
       error <- mean(abs(distances))
     else

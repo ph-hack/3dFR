@@ -1377,20 +1377,28 @@ curvatureVector <- function(data, factor=1){
 # output:
 #   a integer corresponding to the number of target points whose domain
 #   (1st column) are common to both lines/curves
-commonDomain <- function(reference, target){
+commonDomain <- function(reference, target, isOpt=FALSE){
   
   #gets the number of points of the target
   n <- length(target[,1])
   #initializes the result with 0
   k <- 0
   
-  #for each point...
-  for(i in 1:n){
-    #if the there is at least one reference point with the same domain ...
-    if(length(which(reference[,1] == target[i,1])) > 0)
-      #adds 1 into 'k'
-      k <- k + 1
+  #if it is to use the optimal algorithm
+  if(isOpt){
+    
+    cMin <- max(reference[1,1], target[1,1])
+    cMax <- min(reference[n,1], target[n,1])
+    k <- cMax - cMin + 1
   }
+  else
+    #for each point...
+    for(i in 1:n){
+      #if the there is at least one reference point with the same domain ...
+      if(length(which(reference[,1] == target[i,1])) > 0)
+        #adds 1 into 'k'
+        k <- k + 1
+    }
   
   #returns the result
   (k)
