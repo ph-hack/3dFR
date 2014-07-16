@@ -26,8 +26,8 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   primeTarget <- target
   
   #computes the descriptor lines of both curves
-  referenceLine <- linearInterpolation(reference)
-  targetLine <- linearInterpolation(target)
+  referenceLine <- linearInterpolation(reference, TRUE)
+  targetLine <- linearInterpolation(target, TRUE)
   
   #computes the angle between them
   angle <- atan(referenceLine$a - targetLine$a)

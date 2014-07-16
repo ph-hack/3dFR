@@ -1,17 +1,34 @@
+#' Computes the angular coefficient of a line
+#' given two points.
+#' ----------------------------------------------
+angularCoeff <- function(x1, y1, x2, y2){
+  
+  if(x1 - x2 != 0)
+    return ((y1 - y2)/(x1 - x2))
+  else
+    return (0)
+}
 
-linearInterpolation <- function(data){
+#' Computes the line model that best fits the given data points.
+#' -------------------------------------------------------------
+linearInterpolation <- function(data, isOpt=FALSE){
   
   m <- length(data[,1])
   
   angularCoefficients <- rep(0, m-1)
   
-  for(i in 1:(m-1)){
+  if(isOpt){
     
-    if(data[i+1,1] - data[i,1] != 0)
-      angularCoefficients[i] <- (data[i+1,2] - data[i,2])/(data[i+1,1] - data[i,1])
-    else
-      angularCoefficents[i] <- 0
+    angularCoefficients <- mapply(angularCoeff, data[1:(m-1),1], data[1:(m-1),2], data[2:m,1], data[2:m,2])
   }
+  else
+    for(i in 1:(m-1)){
+      
+      if(data[i+1,1] - data[i,1] != 0)
+        angularCoefficients[i] <- (data[i+1,2] - data[i,2])/(data[i+1,1] - data[i,1])
+      else
+        angularCoefficents[i] <- 0
+    }
   
   #angularMean <- mean(angularCoefficients)
   aux <- which(abs(angularCoefficients) <= abs(mean(angularCoefficients)))
