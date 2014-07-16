@@ -1479,7 +1479,7 @@ rotation.factors <- function(distances, reference, target){
 #   angle = the angle of the rotation
 # output:
 #   a 2D matrix of numbers, corresponding the curve/line rotated
-rotateCurve <- function(curve, referenceX, angle){
+rotateCurve <- function(curve, referenceX, angle, isOpt=FALSE){
   
   #gets the number of points of the curve/line
   m <- length(curve[,1])
@@ -1490,6 +1490,10 @@ rotateCurve <- function(curve, referenceX, angle){
   #builds the rotation matrix
   rotationMatrix <- matrix(c(cos(angle), sin(angle), -sin(angle), cos(angle)), ncol=2)
   
+  if(isOpt){
+    curve <- t(rotationMatrix %*% t(curve))
+  }
+  else
   #for each point...
   for(i in 1:m)
     #computes the rotation by multiplying the rotation matrix with the point

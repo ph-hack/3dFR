@@ -32,7 +32,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   #computes the angle between them
   angle <- atan(referenceLine$a - targetLine$a)
   #performs the rotation in the target to make it closer to the reference
-  target <- rotateCurve(target, 0, angle)
+  target <- rotateCurve(target, 0, angle, TRUE)
   
   #interpolates the points in order to obtain interger coordinates in X
   target <- interpolateXinteger(target)
