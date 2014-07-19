@@ -1509,49 +1509,89 @@ rotateCurve <- function(curve, referenceX, angle, isOpt=FALSE){
   (curve)
 }
 
+#discretizePoint <- function(x1, y1, x2, y2, m){
+discretizePoint <- function(xs, m){
+  
+  i <- Position(function(x){return(x > xs)}, m[,1])
+  
+  line <- findLine(m[i-1,], m[i,])
+  
+  y <- appLinear(line, xs)
+  
+  return(c(xs, y))
+  
+#   if(x1 + 0.5 < x2){
+#     #computes the line which passes through the 'i'th point and its successor
+#     line <- findLine(c(x1, y1), c(x2, y2))
+#     
+#     #finds the correspoding value (2nd column) to this new domain value
+#     x <- round(x1)
+#     y <- appLinear(line, x)
+#     #applies the results
+#     return (c(x,y))
+#   }
+#   else
+#     return (c(x1,y1))
+}
+
 # Interpolates the signal m, a 2D matrix, in a way that all 'x's (1st column)
 # will be integers.
 # input:
 #   m = a curve, represented as a 2D matrix with 2 columns, one for each dimension
 # output:
 #   a 2D matrix containing the curve with all 1st column values as integers
-interpolateXinteger <- function(m){
+interpolateXinteger <- function(m, isOpt=FALSE){
   
   #gets the number of points (rows) of 'm'
   n <- length(m[,2])
   
-  #for each point, but the last...
-  for(i in 1:(n-1)){
+  if(isOpt){
     
-    #computes the line which passes through the 'i'th point and its successor
-    line <- findLine(m[i,], m[i+1,])
-    
-    #if the difference between the domain values of the 'i'th point and its successor
-    #is equal or greater than a half, interpolates the 'i'th point
-    if(abs(m[i,1] - m[i+1,1]) >= 0.5){
-      
-      #finds the closest integer
-      x <- round(m[i,1])
-      #finds the correspoding value (2nd column) to this new domain value
-      y <- appLinear(line, x)
-      #applies the results
-      m[i,1] <- x
-      m[i,2] <- y
-    }
+    x <- floor(m[1,1])
+    N <- floor(m[n,1]) - x
+    #m2 <- t(mapply(discretizePoint, m[1:(n-1),1], m[1:(n-1),2], m[2:n,1], m[2:n,2]))
+    m2 <- t(mapply(discretizePoint, x:(x + N - 1), MoreArgs=list(m = m)))
+    #return(m2)
   }
+  else
+  #for each point, but the last...
+    for(i in 1:(n-1)){
+      
+      #computes the line which passes through the 'i'th point and its successor
+      line <- findLine(m[i,], m[i+1,])
+      
+      #if the difference between the domain values of the 'i'th point and its successor
+      #is equal or greater than a half, interpolates the 'i'th point
+      if(abs(m[i,1] - m[i+1,1]) >= 0.5){
+        
+        #finds the closest integer
+        x <- round(m[i,1])
+        #finds the correspoding value (2nd column) to this new domain value
+        y <- appLinear(line, x)
+        #applies the results
+        m[i,1] <- x
+        m[i,2] <- y
+      }
+    }
   
   #does the same thing to the last point
   line <- findLine(m[n-1,], m[n,])
   
   if(abs(m[n-1,1] - m[n,1]) >= 0.5){
     
-    x <- round(m[n,1])
+    x <- ceiling(m[n,1])
     y <- appLinear(line, x)
     m[n,1] <- x
     m[n,2] <- y
   }
   
   #returns the interpolated curve
+  if(isOpt)
+    m <- rbind(m2, m[n,])
+  
+  #removes the remaining floating domains
+  #m <- m[which(m[,1] == ceiling(m[,1])),]
+  
   (m)
 }
 
@@ -1685,23 +1725,39 @@ factor.p2p <- function(reference, target, distances){
   (factors)
 }
 
+difference <- function(x, y){
+  
+  return (x - y);
+}
+
 # Computes the distance in 'y' for each point by the target's coordinate
-dist.p2p <- function(reference, target){
+dist.p2p <- function(reference, target, isOpt=FALSE){
   
   n <- length(target[,1])
   
   distances <- rep(0, n)
   notPresent <- 0
   
-  for(i in 1:n){
+  if(isOpt){
     
-    x <- target[i,1]
+    xmin <- max(target[1,1], reference[1,1])
+    xmax <- min(reference[n,1], target[n,1])
     
-    if(length(which(reference[,1] == x)) > 0)
-      distances[i] <- reference[which(reference[,1] == x), 2] - target[i,2]
-    else
-      notPresent <- c(notPresent, i)
+    ref <- (Position(function(x){return(x == xmin)}, reference[,1]):Position(function(x){return(x == xmax)}, reference[,1]))
+    tar <- (Position(function(x){return(x == xmin)}, target[,1]):Position(function(x){return(x == xmax)}, target[,1]))
+    
+    distances <- mapply(difference, reference[ref,2], target[tar,2])
   }
+  else
+    for(i in 1:n){
+      
+      x <- target[i,1]
+      
+      if(length(which(reference[,1] == x)) > 0)
+        distances[i] <- reference[which(reference[,1] == x), 2] - target[i,2]
+      else
+        notPresent <- c(notPresent, i)
+    }
   
   notPresent <- notPresent[-1]
   if(length(notPresent) > 0)

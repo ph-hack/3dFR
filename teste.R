@@ -35,13 +35,13 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   target <- rotateCurve(target, 0, angle, TRUE)
   
   #interpolates the points in order to obtain interger coordinates in X
-  target <- interpolateXinteger(target)
+  target <- interpolateXinteger(target, TRUE)
   
   #checks whether the curves got too far
   if(commonDomain(reference, target, TRUE) >= threshold){
     
     #if they didn't, measures the distances for each point
-    distances <- dist.p2p(reference, target)
+    distances <- dist.p2p(reference, target, TRUE)
     #cat("they are common enougth\n")
     #cat("common domain = ", commonDomain(reference, target), "; threshold = ", threshold, "\n")
     #remembers the prime target
@@ -52,7 +52,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     #retrieves the prime target
     target <- primeTarget
     #measures the distances for each point
-    distances <- dist.p2p(reference, target)
+    distances <- dist.p2p(reference, target, TRUE)
     #computes the mean error
     error <- mean(abs(distances))
     
@@ -115,7 +115,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     
     #measures the distances for each point
     target <- interpolateXinteger(target)
-    distances <- dist.p2p(reference, target)
+    distances <- dist.p2p(reference, target, TRUE)
     
     #checks whether the curves got too far
     if(commonDomain(reference, target, TRUE) >= threshold)
