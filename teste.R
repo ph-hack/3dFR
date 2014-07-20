@@ -1,5 +1,5 @@
 
-my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, threshold=0){
+my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, threshold=0, isOpt=TRUE){
   
   #gets the amount of points, a.k.a. the domain
   m <- length(reference)
@@ -19,29 +19,29 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   reference <- takeNoneFaceOut(reference)
   target <- takeNoneFaceOut(target)
   
-  if(commonDomain(reference, target, TRUE) == 0)
+  if(commonDomain(reference, target, isOpt) == 0)
     return(list(target = target, error = m, energyTotal = m, energyMean = m))
   
   #remembers the prime target
   primeTarget <- target
   
   #computes the descriptor lines of both curves
-  referenceLine <- linearInterpolation(reference, TRUE)
-  targetLine <- linearInterpolation(target, TRUE)
+  referenceLine <- linearInterpolation(reference, isOpt)
+  targetLine <- linearInterpolation(target, isOpt)
   
   #computes the angle between them
   angle <- atan(referenceLine$a - targetLine$a)
   #performs the rotation in the target to make it closer to the reference
-  target <- rotateCurve(target, 0, angle, TRUE)
+  target <- rotateCurve(target, 0, angle, isOpt)
   
   #interpolates the points in order to obtain interger coordinates in X
-  target <- interpolateXinteger(target, TRUE)
+  target <- interpolateXinteger(target, isOpt)
   
   #checks whether the curves got too far
-  if(commonDomain(reference, target, TRUE) >= threshold){
+  if(commonDomain(reference, target, isOpt) >= threshold){
     
     #if they didn't, measures the distances for each point
-    distances <- dist.p2p(reference, target, TRUE)
+    distances <- dist.p2p(reference, target, isOpt)
     #cat("they are common enougth\n")
     #cat("common domain = ", commonDomain(reference, target), "; threshold = ", threshold, "\n")
     #remembers the prime target
@@ -52,7 +52,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     #retrieves the prime target
     target <- primeTarget
     #measures the distances for each point
-    distances <- dist.p2p(reference, target, TRUE)
+    distances <- dist.p2p(reference, target, isOpt)
     #computes the mean error
     error <- mean(abs(distances))
     
@@ -96,14 +96,33 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     translationFactorX <- 0
     translationFactorY <- 0
     
-    for(j in samples){
+    if(isOpt){
       
-      dists <- as.matrix(dist(rbind(target[j,], reference)))[1,-1]
-      k <- which.min(dists)
+      data <- list(target = target, reference = reference, translationFactorX = 0, translationFactorY = 0)
       
-      translationFactorX <- translationFactorX + reference[k,1] - target[j,1]
-      translationFactorY <- translationFactorY + reference[k,2] - target[j,2]
+      data <- Reduce(function(data, sample){
+        
+        dists <- as.matrix(dist(rbind(target[sample,], reference)))[1,-1]
+        k <- which.min(dists)
+        
+        data$translationFactorX <- data$translationFactorX + reference[k,1] - target[sample,1]
+        data$translationFactorY <- data$translationFactorY + reference[k,2] - target[sample,2]
+        
+        return (data)
+      }, samples, data)
+      
+      translationFactorX <- data$translationFactorX
+      translationFactorY <- data$translationFactorY
     }
+    else
+      for(j in samples){
+        
+        dists <- as.matrix(dist(rbind(target[j,], reference)))[1,-1]
+        k <- which.min(dists)
+        
+        translationFactorX <- translationFactorX + reference[k,1] - target[j,1]
+        translationFactorY <- translationFactorY + reference[k,2] - target[j,2]
+      }
     
     translationFactorX <- translationFactorX/nSamples
     translationFactorY <- translationFactorY/nSamples
@@ -114,11 +133,11 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     target[,2] <- target[,2] + translationFactorY
     
     #measures the distances for each point
-    target <- interpolateXinteger(target)
-    distances <- dist.p2p(reference, target, TRUE)
+    target <- interpolateXinteger(target, isOpt)
+    distances <- dist.p2p(reference, target, isOpt)
     
     #checks whether the curves got too far
-    if(commonDomain(reference, target, TRUE) >= threshold)
+    if(commonDomain(reference, target, isOpt) >= threshold)
       #if they didn't, measures the error
       error <- mean(abs(distances))
     else
