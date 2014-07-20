@@ -1388,7 +1388,7 @@ commonDomain <- function(reference, target, isOpt=FALSE){
   if(isOpt){
     
     cMin <- max(reference[1,1], target[1,1])
-    cMax <- min(reference[n,1], target[n,1])
+    cMax <- min(reference[(length(reference[,1])),1], target[n,1])
     k <- cMax - cMin + 1
   }
   else
@@ -1514,6 +1514,16 @@ discretizePoint <- function(xs, m){
   
   i <- Position(function(x){return(x > xs)}, m[,1])
   
+  if(is.na(i))
+    i <- length(m[,1])
+  else if(i == 1)
+    i <- 2
+  
+  #cat("i:", i, " mi-1:", m[i-1,], " mi:", m[i,], "\n")
+  
+  if(xs == m[i,1])
+    return(m[i,])
+  
   line <- findLine(m[i-1,], m[i,])
   
   y <- appLinear(line, xs)
@@ -1534,6 +1544,13 @@ discretizePoint <- function(xs, m){
 #     return (c(x1,y1))
 }
 
+AND <- function(x){
+  
+  return (Reduce(function(p, x){
+    return(p && x)
+  }, x, TRUE))
+}
+
 # Interpolates the signal m, a 2D matrix, in a way that all 'x's (1st column)
 # will be integers.
 # input:
@@ -1545,13 +1562,19 @@ interpolateXinteger <- function(m, isOpt=FALSE){
   #gets the number of points (rows) of 'm'
   n <- length(m[,2])
   
+  m2 <- 0
   if(isOpt){
     
     x <- floor(m[1,1])
     N <- floor(m[n,1]) - x
+    
+    if(AND(m[,1] != floor(m[,1])))
+    
     #m2 <- t(mapply(discretizePoint, m[1:(n-1),1], m[1:(n-1),2], m[2:n,1], m[2:n,2]))
     m2 <- t(mapply(discretizePoint, x:(x + N - 1), MoreArgs=list(m = m)))
     #return(m2)
+    else
+      return (m)
   }
   else
   #for each point, but the last...
@@ -1579,7 +1602,7 @@ interpolateXinteger <- function(m, isOpt=FALSE){
   
   if(abs(m[n-1,1] - m[n,1]) >= 0.5){
     
-    x <- ceiling(m[n,1])
+    x <- floor(m[n,1])
     y <- appLinear(line, x)
     m[n,1] <- x
     m[n,2] <- y
@@ -1740,8 +1763,10 @@ dist.p2p <- function(reference, target, isOpt=FALSE){
   
   if(isOpt){
     
+    m <- length(reference[,1])
+    
     xmin <- max(target[1,1], reference[1,1])
-    xmax <- min(reference[n,1], target[n,1])
+    xmax <- min(reference[m,1], target[n,1])
     
     ref <- (Position(function(x){return(x == xmin)}, reference[,1]):Position(function(x){return(x == xmax)}, reference[,1]))
     tar <- (Position(function(x){return(x == xmin)}, target[,1]):Position(function(x){return(x == xmax)}, target[,1]))
