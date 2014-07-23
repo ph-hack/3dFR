@@ -1,5 +1,5 @@
 
-my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, threshold=0, isOpt=TRUE){
+my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, threshold=0, isOpt=TRUE, isOpt2=TRUE){
   
   #gets the amount of points, a.k.a. the domain
   m <- length(reference)
@@ -8,7 +8,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     threshold <- round(m/3)
   
   #checks whether there are at least 2 non-zero points in both curves
-  if(length(which(reference != 0)) < 2 && length(which(target != 0)) < 2)
+  if(!isOpt && (length(which(reference != 0)) < 2 || length(which(target != 0)) < 2))
     return(list(target = target, error = m, energyTotal = m, energyMean = m))
   
   #converts them into 2D matrices
@@ -18,6 +18,17 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   #takes out the null parts of both curves
   reference <- takeNoneFaceOut(reference)
   target <- takeNoneFaceOut(target)
+  
+  lr <- length(reference)
+  lt <- length(target)
+  if(isOpt && (lr < 5 || lt < 5)){
+    
+    if(lr < 3 || lt < 3)
+      return(list(target = target, error = m, energyTotal = m, energyMean = m))
+    
+    if((reference[1,2] == 0 && reference[2,2] == 0) || (target[1,2] == 0 && target[2,2] == 0))
+      return(list(target = target, error = m, energyTotal = m, energyMean = m))
+  }
   
   if(commonDomain(reference, target, isOpt) == 0)
     return(list(target = target, error = m, energyTotal = m, energyMean = m))
@@ -35,7 +46,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   target <- rotateCurve(target, 0, angle, isOpt)
   
   #interpolates the points in order to obtain interger coordinates in X
-  target <- interpolateXinteger(target, isOpt)
+  target <- interpolateXinteger(target, isOpt2)
   
   #checks whether the curves got too far
   if(commonDomain(reference, target, isOpt) >= threshold){
@@ -96,7 +107,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     translationFactorX <- 0
     translationFactorY <- 0
     
-    if(isOpt){
+    if(FALSE){
       
       data <- list(target = target, reference = reference, translationFactorX = 0, translationFactorY = 0)
       
@@ -128,12 +139,16 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     translationFactorY <- translationFactorY/nSamples
     
     #performs the translation in X
-    target[,1] <- target[,1] + translationFactorX
+    if(isOpt)
+      target[,1] <- target[,1] + round(translationFactorX)
+    else
+      target[,1] <- target[,1] + translationFactorX
     #performs the translation in Y
     target[,2] <- target[,2] + translationFactorY
     
     #measures the distances for each point
-    target <- interpolateXinteger(target, isOpt)
+    if(!isOpt)
+      target <- interpolateXinteger(target, isOpt2)
     distances <- dist.p2p(reference, target, isOpt)
     
     #checks whether the curves got too far
