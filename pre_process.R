@@ -134,57 +134,6 @@ outlierCorrection4 <- function(img, meanImg, threshold=0, file="", progress=FALS
   (unoutlied)
 }
 
-# Splits a given string 'str' by a pattern 'split' and returns ----
-# the 'index'th part of the splitting.
-# intput:
-#   str = either a string or a vector of strings
-#   split = a string representing the pattern to split the string
-#   index = a integer specifying which part of the splitting shall be returned.
-# output:
-#   either a string or a vector of strings with the 'index'th part of the splitting.
-my.strsplit <- function(str, split, index){
-  
-  #if 'str' is a vector ...
-  if(length(str) > 1){
-    #uses the standard function to split 'str'
-    #'aux' will be a list will the splitting for each element of 'str'
-    aux <- strsplit(str, split)
-    #finds the length of the resulting splitting
-    n <- length(aux)
-    #initiates the result as 'n' empty strings
-    res <- rep("", n)
-    
-    #for each of the 'n' splittings
-    for(i in 1:n)
-      #if index is less than 1, starts the search by the end of the splitting
-      #in other words, gets the reverse position
-      if(index < 1)
-        res[i] <- aux[[i]][length(aux[[i]])-index]
-      else
-        #otherwise, gets the 'index'th position
-        res[i] <- aux[[i]][index]
-    
-    #returns all 'n' selected parts of the splittings
-    (res)
-  }
-  #otherwise ...
-  else{
-    
-    #splits 'str' with the standard function
-    res <- strsplit(str, split)[[1]]
-    
-    #if index is less than 1, gets the reverse position
-    if(index < 1)
-      res <- res[length(res) -index]
-    else
-      #otherwise, gets the 'index'th position
-      res <- res[index]
-    
-    #returns the selected part of the splitting
-    (res)
-  }
-}
-
 # Generates a mean face image with the training set ----
 # input:
 #   trainingDir = a string containing the path to the training directory
@@ -907,44 +856,6 @@ my.icp.3d <- function(reference, target, matchingMethod="", sampling=TRUE, maxIt
    (list(transformations=transformations, target=target, error=error))
 }
 
-# Samples a specific amount of points from a data set by using k-means algorithm----
-# input:
-#   x = a matrix where each row contains a point and each column is one dimension of the points
-#   n = the number of samples to be collected
-#   iter.max = the maximum number of iterations fot the k-mean execution
-#   nstart = the number of restart for the k-mean execution
-# output:
-#   a vector containing the index of each point (row) selected
-my.sample <- function(x, n, iter.max=100, nstart=3){
-  
-  begin <- getTime()
-  start <- getTime()
-  kmResult <- kmeans(x, n, iter.max, nstart)
-  cat("kmeans executed", crono.end(start), "|")
-  start <- getTime()
-  
-  clusters <- kmResult$cluster
-  M <- length(clusters)
-  
-  samples <- c(0, n)
-  
-  for(i in 1:n){
-    
-    pointsOfClusterI <- which(kmResult$cluster == i)
-    if(length(pointsOfClusterI) == 1)
-      p <- findMatch(matrix(x[pointsOfClusterI,], nrow=1), kmResult$centers[i,])
-    else
-      p <- findMatch(x[pointsOfClusterI,], kmResult$centers[i,])
-    samples[i] <- pointsOfClusterI[p$point]
-    
-    #cat(i * 100/n, "%\n")
-  }
-  cat("sample selected ", crono.end(start), "|")
-  cat("total: ", crono.end(begin), "\n")
-  
-  (samples)
-}
-
 # Returns a identity matrix size x size----
 matrix.identity <- function(size){
   
@@ -971,36 +882,6 @@ matrix.trace <- function(m){
     tr <- tr + m[i,i]
   
   (tr)
-}
-
-# Retrieves all values of a given field of a list in a given level ----
-# input:
-#   theList = the list which have the values;
-#   index = the field
-#   level = the level of 'theList' where is the field 'index'
-# output:
-#   a list containing all occurences of such field
-# Example:
-#   y = list(list(p=5, d=10), list(p=3, d=10), list(p=2, d=5))
-#   the output of the call with theList=y, index="d", level=2)
-#   will be 10,10,5
-getAllFieldFromList <- function(theList, index=1, level=1){
-  
-  n <- length(theList)
-  field <- list()
-  
-  if(level > 1){
-    
-    for(i in 1:n){
-      
-      field[[i]] <- getAllFieldFromList(theList[[i]], index, level-1)
-    }
-  }
-  else{
-    
-    return(theList[[index]])
-  }
-  (field)
 }
 
 # Finds the target's closest point in the reference data ####
@@ -1102,11 +983,6 @@ pca <- function(trainingMatrix, progress=FALSE){
   (list(eigenVectors = E$vectors,
         eigenValues = E$values,
         u = cMean))
-}
-# Computes the cosine distance between two vectors ----
-cosineDist <- function(v1, v2){
-  
-  return(sum(v1 * v2)/(sqrt(sum(v1^2)) * sqrt(sum(v2^2))))
 }
 
 # Compares 2 lines (curves) by better matching them throught linear transformations
@@ -1275,30 +1151,6 @@ my.icp.2d <- function(reference, target, by="mean", maxIter=10, threshold=0){
   (list(target = primeTarget, error = primeError, energyTotal = energy, energyMean = (energy/(i - 1))))
 }
 
-# Removes the points with black/zero value.
-# input:
-#   data = a 2D matrix containing a line/curve
-# output:
-#   a 2D matrix containing the biggest part of 'data' which
-#   doesn't contain black/zero value.
-takeNoneFaceOut <- function(data){
-  
-  #finds the domain whose image is zero
-  noface <- data[which(data[,2] == 0),1]
-  #adds the first and the last points
-  noface <- c(data[1,1], noface, data[length(data[,1]),1])
-  #finds where is the first biggest interval
-  biggestInterval <- which.max(differenceVector(noface))
-  #finds the interval itself
-  interval <- c(noface[biggestInterval]+1, noface[biggestInterval+1]-1)
-  
-  #removes all points but the found interval
-  data <- data[interval[1]:interval[2],]
-  
-  #returns the cropped data
-  (data)
-}
-
 # Computes the difference between each point of a line/curve
 # intput:
 #   data = a vector 'D' of numbers with 'n' elements
@@ -1368,42 +1220,6 @@ curvatureVector <- function(data, factor=1){
   (curvature)
 }
 
-# Computes the common domain between two lines/curves.
-# This is given by the number of points whose domains belongs to
-# both lines/curves.
-# input:
-#   reference = a 2D matrix, the reference line/curve
-#   target = a 2D matrix, the target line/curve
-# output:
-#   a integer corresponding to the number of target points whose domain
-#   (1st column) are common to both lines/curves
-commonDomain <- function(reference, target, isOpt=FALSE){
-  
-  #gets the number of points of the target
-  n <- length(target[,1])
-  #initializes the result with 0
-  k <- 0
-  
-  #if it is to use the optimal algorithm
-  if(isOpt){
-    
-    cMin <- max(reference[1,1], target[1,1])
-    cMax <- min(reference[(length(reference[,1])),1], target[n,1])
-    k <- cMax - cMin + 1
-  }
-  else
-    #for each point...
-    for(i in 1:n){
-      #if the there is at least one reference point with the same domain ...
-      if(length(which(reference[,1] == target[i,1])) > 0)
-        #adds 1 into 'k'
-        k <- k + 1
-    }
-  
-  #returns the result
-  (k)
-}
-
 ####### NOT USED FUNCTION #########
 # Computes the rotation factors given the distance values
 # and 2 lines/curves in order to approach the 2nd curve to 
@@ -1471,44 +1287,6 @@ rotation.factors <- function(distances, reference, target){
     (list(p=0, angle=0))
 }
 
-# Rotates a given curve/line based on a given reference coordinate
-# and a given angle. The transformation is perfomed by multiplying matrices.
-# input:
-#   curve = a 2D matrix of numbers with 2 columns, one for each dimension
-#   referenceX = the coordinate of the 1st column dimension where to fix the rotation
-#   angle = the angle of the rotation
-# output:
-#   a 2D matrix of numbers, corresponding the curve/line rotated
-rotateCurve <- function(curve, referenceX, angle, isOpt=FALSE){
-  
-  #gets the number of points of the curve/line
-  m <- length(curve[,1])
-  
-  #translates the curve so the referenceX point will be at the origin
-  curve[,1] <- curve[,1] - referenceX
-  
-  #builds the rotation matrix
-  rotationMatrix <- matrix(c(cos(angle), sin(angle), -sin(angle), cos(angle)), ncol=2)
-  
-  if(isOpt){
-    curve <- t(rotationMatrix %*% t(curve))
-  }
-  else
-  #for each point...
-  for(i in 1:m)
-    #computes the rotation by multiplying the rotation matrix with the point
-    curve[i,] <- rotationMatrix %*% matrix(curve[i,], nrow=2)
-  
-  #translates back the curve as the original one
-  curve[,1] <- curve[,1] + referenceX
-  
-  #interpolates the curve to make sure all 1st column coordinates will be integers
-  curve <- interpolateXinteger(curve)
-  
-  #returns the curve rotated
-  (curve)
-}
-
 #discretizePoint <- function(x1, y1, x2, y2, m){
 discretizePoint <- function(xs, m){
   
@@ -1542,80 +1320,6 @@ discretizePoint <- function(xs, m){
 #   }
 #   else
 #     return (c(x1,y1))
-}
-
-AND <- function(x){
-  
-  return (Reduce(function(p, x){
-    return(p && x)
-  }, x, TRUE))
-}
-
-# Interpolates the signal m, a 2D matrix, in a way that all 'x's (1st column)
-# will be integers.
-# input:
-#   m = a curve, represented as a 2D matrix with 2 columns, one for each dimension
-# output:
-#   a 2D matrix containing the curve with all 1st column values as integers
-interpolateXinteger <- function(m, isOpt=FALSE){
-  
-  #gets the number of points (rows) of 'm'
-  n <- length(m[,2])
-  
-  m2 <- 0
-  if(isOpt){
-    
-    x <- floor(m[1,1])
-    N <- floor(m[n,1]) - x
-    
-    if(AND(m[,1] != floor(m[,1])))
-    
-    #m2 <- t(mapply(discretizePoint, m[1:(n-1),1], m[1:(n-1),2], m[2:n,1], m[2:n,2]))
-    m2 <- t(mapply(discretizePoint, x:(x + N - 1), MoreArgs=list(m = m)))
-    #return(m2)
-    else
-      return (m)
-  }
-  else
-  #for each point, but the last...
-    for(i in 1:(n-1)){
-      
-      #computes the line which passes through the 'i'th point and its successor
-      line <- findLine(m[i,], m[i+1,])
-      
-      #if the difference between the domain values of the 'i'th point and its successor
-      #is equal or greater than a half, interpolates the 'i'th point
-      if(abs(m[i,1] - m[i+1,1]) >= 0.5){
-        
-        #finds the closest integer
-        x <- round(m[i,1])
-        #finds the correspoding value (2nd column) to this new domain value
-        y <- appLinear(line, x)
-        #applies the results
-        m[i,1] <- x
-        m[i,2] <- y
-      }
-    }
-  
-  #does the same thing to the last point
-  line <- findLine(m[n-1,], m[n,])
-  
-  if(abs(m[n-1,1] - m[n,1]) >= 0.5){
-    
-    x <- floor(m[n,1])
-    y <- appLinear(line, x)
-    m[n,1] <- x
-    m[n,2] <- y
-  }
-  
-  #returns the interpolated curve
-  if(isOpt)
-    m <- rbind(m2, m[n,])
-  
-  #removes the remaining floating domains
-  #m <- m[which(m[,1] == ceiling(m[,1])),]
-  
-  (m)
 }
 
 # Computes the scale factor to approach the target curve
@@ -1751,44 +1455,6 @@ factor.p2p <- function(reference, target, distances){
 difference <- function(x, y){
   
   return (x - y);
-}
-
-# Computes the distance in 'y' for each point by the target's coordinate
-dist.p2p <- function(reference, target, isOpt=FALSE){
-  
-  n <- length(target[,1])
-  
-  distances <- rep(0, n)
-  notPresent <- 0
-  
-  if(isOpt){
-    
-    m <- length(reference[,1])
-    
-    xmin <- max(target[1,1], reference[1,1])
-    xmax <- min(reference[m,1], target[n,1])
-    
-    ref <- (Position(function(x){return(x == xmin)}, reference[,1]):Position(function(x){return(x == xmax)}, reference[,1]))
-    tar <- (Position(function(x){return(x == xmin)}, target[,1]):Position(function(x){return(x == xmax)}, target[,1]))
-    
-    distances <- mapply(difference, reference[ref,2], target[tar,2])
-  }
-  else
-    for(i in 1:n){
-      
-      x <- target[i,1]
-      
-      if(length(which(reference[,1] == x)) > 0)
-        distances[i] <- reference[which(reference[,1] == x), 2] - target[i,2]
-      else
-        notPresent <- c(notPresent, i)
-    }
-  
-  notPresent <- notPresent[-1]
-  if(length(notPresent) > 0)
-    distances <- distances[-notPresent]
-  
-  (distances)
 }
 
 # Reads the main Lines from file returning either a vector or a list
@@ -3140,26 +2806,6 @@ outlierCorrection3 <- function(img, curvature, file="", progress=FALSE, maxORmin
   (img)
 }
 
-my.maxORmin <- function(data1, data2, maxORmin="max"){
-  
-  col <- length(data1[1,])
-  row <- length(data1[,1])
-  
-  output <- matrix(rep(0, col*row), ncol=col)
-  
-  for(i in 1:row){
-    for(j in 1:col){
-      
-      if(maxORmin == "max")
-        output[i,j] <- max(data1[i,j], data2[i,j])
-      else
-        output[i,j] <- min(data1[i,j], data2[i,j])
-    }
-  }
-  
-  (output)
-}
-
 #Resample the face points, so the final amount of
 #points is the one determined. 
 #The k-means algorithm is used in such a task.
@@ -3775,55 +3421,6 @@ lines2image <- function(lines, col=150, row=210, progressFlag=FALSE){
   (img)
 }
 
-list2vector <- function(list){
-  
-  n <- length(list)
-  
-  v <- rep(0, n)
-  
-  for(i in 1:n){
-    
-    v[i] <- list[[i]]
-  }
-  
-  (v)
-}
-
-ponderateVote <- function(votes, by="min"){
-  
-  #gets the number of votes
-  n <- length(votes[,1])
-  
-  #gets the unique candidates
-  uVotes <- unique(votes[,1])
-  #gets the number of unique candidates
-  m <- length(uVotes)
-  
-  maxV <- max(votes[,2]) + 1
-  
-  results <- rep(0,m)
-  
-  for(i in 1:m){
-    
-    v <- which(votes[,1] == uVotes[i])
-    k <- length(v)
-    
-    for(j in 1:k){
-      
-      if(votes[v[j], 2] == 0)
-        votes[v[j],2] <- 0.0000001
-      
-      if(by == "min")
-        results[i] <- results[i] + maxV - votes[v[j],2]
-      else if(by == "max")
-        results[i] <- results[i] + votes[v[j],2]
-    }
-    #results[i] <- results[i]/k
-  }
-  
-  (c(uVotes[which.max(results)], max(results)))
-}
-
 measureEnergy <- function(curve){
   
   n <- length(curve)
@@ -3895,20 +3492,6 @@ resize <- function(img, file="", col=25, row=35, reason=1){
 
 # x = matrix(c(3,5,6,1,4,8), nrow=2, byrow=TRUE)
 # circles = getSamplePoints(getSphere(x), 50)
-
-discretize <- function(x, n, range=c(0,1)){
-  
-  minX <- min(x)
-  maxX <- max(x)
-  
-  deltaX <- (range[2] - range[1])/n
-  
-  x <- ((x - minX)*(range[2]-range[1]))/(maxX - minX)
-  
-  x <- floor(x/deltaX) * deltaX
-  
-  (x)
-}
 
 checkClosestIntegrity <- function(closestDir, nClosest, isTraining=FALSE){
   

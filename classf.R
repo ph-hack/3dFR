@@ -2,6 +2,59 @@ library(class)
 library(mmand)
 library(e1071)
 
+# Retrieves the face's person ID from the fileName, which can be the ABS, JPG or LDMK file(s).
+# input:
+#   fileName = either a string with the name of a 3D face file(ABS, JPG or LDMK)
+#              or a vector with all file names
+# output:
+#   either a string containing only the ID of the face or a vector with all IDs.
+#   e.g. "02463d452.abs" -> "02463"
+getPersonID <- function(fileName){
+  
+  name <- ""
+  n <- length(fileName)
+  if(n > 1){
+    
+    name <- rep(0, n)
+    for(i in 1:n){
+      
+      aux <- strsplit(fileName[i], "[/.]")[[1]]
+      name[i] <- aux[which(regexpr(text=aux, pattern="[0-9]+d[0-9]+") == 1)]
+      name[i] <- strsplit(name[i], "d")[[1]][1]
+    }
+  }
+  else{
+    name <- strsplit(fileName, "[/.]")[[1]]
+    name <- name[which(regexpr(text=name, pattern="[0-9]+d[0-9]+") == 1)]
+    name <- strsplit(name, "d")[[1]][1]
+  }
+  
+  (name)
+}
+
+getFaceID <- function(fileName){
+  
+  n <- length(fileName)
+  name <- ""
+  
+  if(n > 1){
+    
+    name <- rep("", n)
+    
+    for(i in 1:n){
+      
+      aux <- strsplit(fileName[i], "[/.]")[[1]]
+      name[i] <- aux[which(regexpr(text=aux, pattern="[0-9]+d[0-9]+") == 1)]
+    }
+  }
+  else{
+    name <- strsplit(fileName, "[/.]")[[1]]
+    name <- name[which(regexpr(text=name, pattern="[0-9]+d[0-9]+") == 1)]
+  }
+  
+  (name)
+}
+
 separateDataSet <- function(dataDir, sulfix=".unholed", proportions=c(0.7,0.3)){
   
   faceNames <- unique(getFaceID(dir(dataDir)))
@@ -822,12 +875,37 @@ kNeigbourSelector <- function(trainingDir, testDir, training=0, test=0, toFile="
   (closest) #returns the 'amount' closest images
 }
 
-is.file <- function(string){
+ponderateVote <- function(votes, by="min"){
   
-  chars <- strsplit(string, "")[[1]]
+  #gets the number of votes
+  n <- length(votes[,1])
   
-  if(chars[length(chars)] == "/")
-    (FALSE)
-  else
-    (TRUE)
+  #gets the unique candidates
+  uVotes <- unique(votes[,1])
+  #gets the number of unique candidates
+  m <- length(uVotes)
+  
+  maxV <- max(votes[,2]) + 1
+  
+  results <- rep(0,m)
+  
+  for(i in 1:m){
+    
+    v <- which(votes[,1] == uVotes[i])
+    k <- length(v)
+    
+    for(j in 1:k){
+      
+      if(votes[v[j], 2] == 0)
+        votes[v[j],2] <- 0.0000001
+      
+      if(by == "min")
+        results[i] <- results[i] + maxV - votes[v[j],2]
+      else if(by == "max")
+        results[i] <- results[i] + votes[v[j],2]
+    }
+    #results[i] <- results[i]/k
+  }
+  
+  (c(uVotes[which.max(results)], max(results)))
 }
