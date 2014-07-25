@@ -298,32 +298,6 @@ resizeImgs <- function(fromDir, toDir, col=25, row=35, reason=1, progress=TRUE){
   }
 }
 
-count_found <- function(logFile){
-  
-  lines <- readLines(logFile)
-  n <- length(lines)
-  
-  founds <- 0
-  missed <- 0
-  
-  for(i in 1:n){
-    
-    line <- strsplit(lines[i], "[ ]")[[1]][1]
-    
-    if(line == "-"){
-      
-      line <- strsplit(lines[i], "[ ]")[[1]][2]
-      
-      if(line == "found")
-        founds <- founds + 1
-      else
-        missed <- missed + 1
-    }
-  }
-  
-  (list(found=founds, missed=missed))
-}
-
 getMeanFacesByPerson <- function(fromDir, toDir, progress=TRUE){
 
   training <- fromDir

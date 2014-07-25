@@ -953,230 +953,6 @@ findMatch <- function(reference, target, guess=0, M=0, N=0){
   return(list(point=candidates[which.min(distances)], distance=min(distances)))
 }
 
-# Applies the PCA into the data matrix ##############################################################################
-# it needs the data matrix where to apply the PCA ('trainingMatrix')
-# and the amount of energy which must be kept
-# it returns a list with the number of dimensions
-# and the eigenVectors
-pca <- function(trainingMatrix, progress=FALSE){
-  cMean <- colMeans(trainingMatrix) #finds the mean of all cols (features)
-  if(progress)
-    print("col means calculated...")
-  
-  #normalizes the transposed matrix so the mean of the cols = 0
-  trainingMatrix <- trainingMatrix - matrix(rep(cMean, dim(trainingMatrix)[1]), ncol=dim(trainingMatrix)[2], byrow=TRUE)
-  if(progress)
-    print("matrix normalized...")
-  
-  transposedTrainingMatrix <- t(trainingMatrix)
-  if(progress)
-    print("transposed calculated...")
-  
-  covarianceMatrix <- transposedTrainingMatrix %*% trainingMatrix #computes the covariance matrix
-  if(progress)
-    print("covariance matrix calculated...")
-  
-  E <- eigen(covarianceMatrix) #decomposes the covariance matrix into UtDU matrices
-  if(progress)
-    print("decomposition made...")
-  
-  (list(eigenVectors = E$vectors,
-        eigenValues = E$values,
-        u = cMean))
-}
-
-# Compares 2 lines (curves) by better matching them throught linear transformations
-# and returns the mean and last error. The error is measured point-to-point.
-# input:
-#   reference = a vector of numbers
-#   target = a vector of numbers
-#   maxIter = the maximum number of iterations allowed, by default 10
-#   threshold = the minimum amount of points to be considered. By default
-#               it is equal to third part of the number of points of the reference
-#               If there is no such amount of points available for measurement, the
-#               error measurement will be returned
-# output:
-#   a list containing:
-#     'target' = the target line after the applied transformations
-#     'error' = the last error computed
-#     'energyTotal' = the sum of the errors of all iterations
-#     'energyMean' = the mean of the errors of all iterations
-my.icp.2d <- function(reference, target, by="mean", maxIter=10, threshold=0){
-  
-  #gets the amount of points, a.k.a. the domain
-  m <- length(reference)
-  
-  if(threshold == 0)
-    threshold <- m/3
-  
-  #checks whether there are at least 2 non-zero points in both curves
-  if(length(which(reference != 0)) < 2 && length(which(target != 0)) < 2)
-    return(list(target = target, error = m, energyTotal = m, energyMean = m))
-  
-  #converts them into 2D matrices
-  reference <- matrix(c(1:m, reference), nrow=m)
-  target <- matrix(c(1:m, target), nrow=m)
-  
-  #takes out the null parts of both curves
-  reference <- takeNoneFaceOut(reference)
-  target <- takeNoneFaceOut(target)
-  
-  if(commonDomain(reference, target) == 0)
-    return(list(target = target, error = m, energyTotal = m, energyMean = m))
-  
-  #remembers the prime target
-  primeTarget <- target
-  
-  #computes the descriptor lines of both curves
-  referenceLine <- linearInterpolation(reference)
-  targetLine <- linearInterpolation(target)
-  
-  #computes the angle between them
-  angle <- atan(referenceLine$a - targetLine$a)
-  #performs the rotation in the target to make it closer to the reference
-  target <- rotateCurve(target, 0, angle)
-  
-  #computes the distance
-  distances <- dist.p2p(reference, target)
-  
-  #computes the initial translation parameters
-  translationFactorX <- reference[which.max(reference[,2]),1] - target[which.max(target[,2]),1]
-  translationFactorY <- mean(distances)
-  
-  #performs the translation
-  target[,1] <- target[,1] + translationFactorX
-  target[,2] <- target[,2] + translationFactorY
-  
-  #interpolates the points in order to obtain interger coordinates in X
-  #target <- interpolateXinteger(target)
-  
-  #checks whether the curves got too far
-  if(commonDomain(reference, target) >= threshold){
-    
-    #if they didn't, measures the distances for each point
-    distances <- dist.p2p(reference, target)
-    #cat("they are common enougth\n")
-    #cat("common domain = ", commonDomain(reference, target), "; threshold = ", threshold, "\n")
-  }
-  else{
-    #otherwise...
-    #retrieves the prime target
-    target <- primeTarget
-    #measures the distances for each point
-    distances <- dist.p2p(reference, target)
-    #computes the mean error
-    #error <- m
-    #if(by == "mean")
-      error <- mean(abs(distances))
-    #else if(by == "cosine")
-      #error <- cosineDist(reference[,2], target[,2])
-    
-    return(list(target = primeTarget, error = error, energyTotal = error, energyMean = error))
-  }
-  
-  #computes the mean error
-  error <- mean(abs(distances))
-  
-  #initializes the prime error bigger than the 1st computed error
-  primeError <- error + 1
-  #initializes the iteration index with 1
-  i <- 1
-  #initializes the energy with 0
-  energy <- 0
-  
-  #as long as the error keeps decreasing and the the maximum number of
-  #iterations hasn't been reached ...
-  while(error < primeError && i <= maxIter){
-    
-    #remembers the prime error
-    primeError <- error
-    #remembers the prime target
-    primeTarget <- target
-    #sums the error into the energy
-    energy <- energy + primeError
-    
-    #computes the scale factor Y
-    factors <- factor.p2p(reference, target, distances)
-    scaleFactorY <- (max(factors) + min(factors[which(factors != 0)])) /2
-    
-    #computes the scale factor X
-    refXvar <- getXvariation(reference)
-    tarXvar <- getXvariation(target)
-    #attenpting to consider only a peace of the reference
-#     if(refXvar$min < tarXvar$max && refXvar$min > tarXvar$min && refXvar$max > tarXvar$max)
-#       tarXvar$min <- refXvar$min
-#     else if(refXvar$max < tarXvar$max && refXvar$max > tarXvar$min && refXvar$min < tarXvar$min)
-#       tarXvar$max <- refXvar$max
-    scaleFactorX <- (refXvar$max - refXvar$min)/(tarXvar$max - tarXvar$min)
-    
-    #performs the scalling
-    target[,2] <- target[,2] * (1 + scaleFactorY)
-    target[,1] <- target[,1] * scaleFactorX
-    
-    #if the X coordinates changed, interpolates the points in order to obtain interger coordinates in X
-    if(scaleFactorX != 1)
-      target <- interpolateXinteger(target)
-    
-    #performs the translation in X
-    translationFactorX <- reference[which.max(reference[,2]),1] - target[which.max(target[,2]),1]
-    target[,1] <- target[,1] + translationFactorX
-    
-    #computes the distance
-    distances <- dist.p2p(reference, target)
-    #performs the translation in Y
-    translationFactorY <- mean(distances)
-    target[,2] <- target[,2] + translationFactorY
-    
-    #measures the distances for each point
-    target <- interpolateXinteger(target)
-    distances <- dist.p2p(reference, target)
-    
-    #checks whether the curves got too far
-    if(commonDomain(reference, target) >= threshold)
-      #if they didn't, measures the error
-      error <- mean(abs(distances))
-    else
-      #otherwise, sets the erro to the prime error plus 1
-      error <- primeError + 1
-    
-    #cat("Iteration ", i, "; error = ", error, "\n")
-    #increasing the iteration index
-    i <- i + 1
-  }
-  #returns the informations
-  #if(by == "mean")
-    #primeError <- mean(abs(distances))
-  #else if(by == "cosine")
-    #primeError <- cosineDist(reference[,2], target[,2])
-  (list(target = primeTarget, error = primeError, energyTotal = energy, energyMean = (energy/(i - 1))))
-}
-
-# Computes the difference between each point of a line/curve
-# intput:
-#   data = a vector 'D' of numbers with 'n' elements
-# output:
-#   a vector 'V' of numbers with 'n'-1 elements containing the difference
-#   between consecutives points of 'data'.
-#   in other words, V[i] = |D[i] - D[i+1]|
-differenceVector <- function(data){
-  
-  #gets the number of points of 'data'
-  n <- length(data)
-  
-  #initializes the result with 0
-  diff <- rep(0, n-1)
-  
-  #for 'n'-1 times...
-  for(i in 1:(n-1)){
-    
-    #computes the absolute difference of each 2 consecutive elements of 'data'
-    diff[i] <- abs(data[i] - data[i+1])
-  }
-  
-  #returns the result
-  (diff)
-}
-
 # Computes the curvature measure in each point of a given vector
 # input:
 #   data = a vector of numbers
@@ -3340,87 +3116,6 @@ getCirclePoints <- function(x, y, r, n){
   (points[-1,])
 }
 
-# Computes the mode of a set.
-# If there is no mode, it returns the mean
-# input:
-#   x = a vector containing the set
-# output:
-#   a value, either the mode or mean of x
-getMode <- function(x){
-  #gets all unique elements of x
-  ux <- unique(x)
-  #gets the frequencies of x's elements
-  h <- tabulate(match(x, ux))
-  #gets the values which maximizes h
-  y <- ux[which(h == max(h))]
-  
-  #if there is more than one which maximizes h,...
-  if(length(y) != 1){
-    
-    #computes the mean, instead
-    y <- mean(x)
-  }
-  
-  #returns the mode, or the mean
-  (y)
-}
-
-# Prints a set of lines into an image in JPEG format.
-# input:
-#   lines = the set of lines, it has to be a list;
-#   col = the number of columns of the image; (default 150)
-#   row = the number of rows of the image; (default 210)
-#   progressFlag = a boolean value, whether the progress must be printed; (default FALSE)
-# output:
-#   a 2D matrix containing the image
-lines2image <- function(lines, col=150, row=210, progressFlag=FALSE){
-  
-  n <- length(lines)
-  
-  img <- matrix(rep(1, col * row), ncol=col)
-  
-  for(i in 1:n){
-    
-    stopFlag <- FALSE
-    
-    cat(lines[[i]]$inverted, "\n")
-    
-    if(lines[[i]]$inverted){
-      y <- 1
-      while(!stopFlag){
-        
-        x <- appLinear(lines[[i]], y)
-        if(x <= col && x >= 1 && y <= row)
-          img[y, x] <- 0
-        else
-          stopFlag <- TRUE
-        
-        y <- y + 1
-      }
-    }
-    else{
-      
-      x <- 1
-      
-      while(!stopFlag){
-        
-        y <- appLinear(lines[[i]], x)
-        if(y >= 1 && y <= row && x <= col)
-          img[y, x] <- 0
-        else
-          stopFlag <- TRUE
-        
-        x <- x + 1
-      }
-    }
-    
-    if(progressFlag)
-      cat(i * 100 / n, "%, ", i, "\n")
-  }
-  
-  (img)
-}
-
 measureEnergy <- function(curve){
   
   n <- length(curve)
@@ -3439,84 +3134,55 @@ measureEnergy <- function(curve){
   (list(energy = energy, meanEnergy = (energy/(n-2))))
 }
 
-my.writeJPEG <- function(data, file, quality=1){
-  
-  #cat(dim(data), "\n")
-  
-  maxData <- max(data[which(data != 0)])
-  minData <- min(data[which(data != 0)])
-  
-  data[which(data != 0)] <- (data[which(data != 0)] - minData)/(maxData - minData)
-
-  #cat(dim(data), "\n")
-  
-  writeJPEG(data, file, quality)
-}
-
-resize <- function(img, file="", col=25, row=35, reason=1){
-  
-  if(is.character(img))
-    img <- readImageData(img)
-  
-  colO <- length(img[1,])
-  rowO <- length(img[,1])
-  
-  if(reason != 1){
-    
-    col <- colO * reason
-    row <- rowO * reason
-  }
-  
-  newImg <- matrix(rep(0, col*row), ncol=col)
-  
-  for(i in 1:row){
-    
-    y <- round(i*rowO/row)
-    
-    for(j in 1:col){
-      
-      x <- round(j*colO/col)
-      
-      newImg[i,j] <- img[y,x]
-    }
-  }
-  
-  if(file != ""){
-    
-    my.writeJPEG(newImg, file)
-    write(t(newImg), concatenate(c(file, ".dat")), col)
-  }
-  
-  (newImg)
-}
-
 # x = matrix(c(3,5,6,1,4,8), nrow=2, byrow=TRUE)
 # circles = getSamplePoints(getSphere(x), 50)
 
-checkClosestIntegrity <- function(closestDir, nClosest, isTraining=FALSE){
+# Performs outlier correction on a curve
+# input:
+#   curve = a vector of numbers
+curveCorrection3 <- function(curve, meanCurve, smooth=0, progress=FALSE){
   
-  closest <- dir(closestDir)
-  N <- length(closest)
-  count <- 0
+  n <- length(curve)
   
-  for(i in 1:N){
-    minI <- 1
-    maxI <- nClosest
-    prefix <- "cl__"
-    if(isTraining){
-      minI <- 2
-      maxI <- nClosest + 1
-      prefix <- "cl_"
-    }
-    cl <- readLines(concatenate(c(closestDir, closest[i])))[minI:maxI]
-    
-    name <- strsplit(closest[i], prefix)[[1]][2]
-    
-    if(length(which(getPersonID(cl) == getPersonID(name))) == 0){
-      cat(name, " has failed!\n")
-      count <- count + 1
-    }
+  #checks whether there are at least 2 non-zero points in both curves
+  if(length(which(curve != 0)) < 2)
+    return(curve)
+  
+  imgVarX <- getXvar(matrix(c(1:n, curve), ncol=2))
+  
+  diff <- meanCurve[imgVarX$min:imgVarX$max] - curve[imgVarX$min:imgVarX$max]
+  diff <- abs(diff - mean(diff))
+  
+  threshold <- 3*mean(diff)
+  
+  xout <- which(diff >= threshold)
+  
+  xs <- (imgVarX$min:imgVarX$max)[-xout]
+  ys <- curve[xs]
+  
+  xout <- xout + imgVarX$min - 1
+  
+  if(length(which(xout == imgVarX$min)) > 0){
+    #xout <- xout[-which(xout + imgVarX$min - 1 == imgVarX$min)]
+    xs <- c(xout[which(xout == imgVarX$min)] - 1, xs)
+    ys <- c(meanCurve[xout[which(xout == imgVarX$min)]], ys)
   }
   
-  cat("done!", count, "has failed!\n")
+  if(length(which(xout == imgVarX$max)) > 0){
+    #xout <- xout[-which(xout + imgVarX$min - 1 == imgVarX$max)]
+    xs <- c(xs, xout[which(xout == imgVarX$max)] + 1)
+    ys <- c(ys, meanCurve[xout[which(xout == imgVarX$max)]])
+  }
+  
+  if(length(xout) > 1){
+    
+    newCurve <- stinterp(xs, ys, xout)
+    curve[newCurve$x] <- newCurve$y
+  }
+  
+  #cat("Executed\n")
+  if(smooth > 0)
+    curve <- gaussianSmooth(curve, c(smooth))
+  
+  (curve)
 }

@@ -909,3 +909,10 @@ ponderateVote <- function(votes, by="min"){
   
   (c(uVotes[which.max(results)], max(results)))
 }
+
+hieraquicalFeatureBasedClassifier <- function(trainingDir){
+  
+  training <- dir(trainingDir)
+  
+  
+}

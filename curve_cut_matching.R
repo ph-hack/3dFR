@@ -166,6 +166,172 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   (list(target = primeTarget, error = primeError, energyTotal = energy, energyMean = (energy/(i - 1))))
 }
 
+# Compares 2 lines (curves) by better matching them throught linear transformations
+# and returns the mean and last error. The error is measured point-to-point.
+# input:
+#   reference = a vector of numbers
+#   target = a vector of numbers
+#   maxIter = the maximum number of iterations allowed, by default 10
+#   threshold = the minimum amount of points to be considered. By default
+#               it is equal to third part of the number of points of the reference
+#               If there is no such amount of points available for measurement, the
+#               error measurement will be returned
+# output:
+#   a list containing:
+#     'target' = the target line after the applied transformations
+#     'error' = the last error computed
+#     'energyTotal' = the sum of the errors of all iterations
+#     'energyMean' = the mean of the errors of all iterations
+my.icp.2d <- function(reference, target, by="mean", maxIter=10, threshold=0){
+  
+  #gets the amount of points, a.k.a. the domain
+  m <- length(reference)
+  
+  if(threshold == 0)
+    threshold <- m/3
+  
+  #checks whether there are at least 2 non-zero points in both curves
+  if(length(which(reference != 0)) < 2 && length(which(target != 0)) < 2)
+    return(list(target = target, error = m, energyTotal = m, energyMean = m))
+  
+  #converts them into 2D matrices
+  reference <- matrix(c(1:m, reference), nrow=m)
+  target <- matrix(c(1:m, target), nrow=m)
+  
+  #takes out the null parts of both curves
+  reference <- takeNoneFaceOut(reference)
+  target <- takeNoneFaceOut(target)
+  
+  if(commonDomain(reference, target) == 0)
+    return(list(target = target, error = m, energyTotal = m, energyMean = m))
+  
+  #remembers the prime target
+  primeTarget <- target
+  
+  #computes the descriptor lines of both curves
+  referenceLine <- linearInterpolation(reference)
+  targetLine <- linearInterpolation(target)
+  
+  #computes the angle between them
+  angle <- atan(referenceLine$a - targetLine$a)
+  #performs the rotation in the target to make it closer to the reference
+  target <- rotateCurve(target, 0, angle)
+  
+  #computes the distance
+  distances <- dist.p2p(reference, target)
+  
+  #computes the initial translation parameters
+  translationFactorX <- reference[which.max(reference[,2]),1] - target[which.max(target[,2]),1]
+  translationFactorY <- mean(distances)
+  
+  #performs the translation
+  target[,1] <- target[,1] + translationFactorX
+  target[,2] <- target[,2] + translationFactorY
+  
+  #interpolates the points in order to obtain interger coordinates in X
+  #target <- interpolateXinteger(target)
+  
+  #checks whether the curves got too far
+  if(commonDomain(reference, target) >= threshold){
+    
+    #if they didn't, measures the distances for each point
+    distances <- dist.p2p(reference, target)
+    #cat("they are common enougth\n")
+    #cat("common domain = ", commonDomain(reference, target), "; threshold = ", threshold, "\n")
+  }
+  else{
+    #otherwise...
+    #retrieves the prime target
+    target <- primeTarget
+    #measures the distances for each point
+    distances <- dist.p2p(reference, target)
+    #computes the mean error
+    #error <- m
+    #if(by == "mean")
+    error <- mean(abs(distances))
+    #else if(by == "cosine")
+    #error <- cosineDist(reference[,2], target[,2])
+    
+    return(list(target = primeTarget, error = error, energyTotal = error, energyMean = error))
+  }
+  
+  #computes the mean error
+  error <- mean(abs(distances))
+  
+  #initializes the prime error bigger than the 1st computed error
+  primeError <- error + 1
+  #initializes the iteration index with 1
+  i <- 1
+  #initializes the energy with 0
+  energy <- 0
+  
+  #as long as the error keeps decreasing and the the maximum number of
+  #iterations hasn't been reached ...
+  while(error < primeError && i <= maxIter){
+    
+    #remembers the prime error
+    primeError <- error
+    #remembers the prime target
+    primeTarget <- target
+    #sums the error into the energy
+    energy <- energy + primeError
+    
+    #computes the scale factor Y
+    factors <- factor.p2p(reference, target, distances)
+    scaleFactorY <- (max(factors) + min(factors[which(factors != 0)])) /2
+    
+    #computes the scale factor X
+    refXvar <- getXvariation(reference)
+    tarXvar <- getXvariation(target)
+    #attenpting to consider only a peace of the reference
+    #     if(refXvar$min < tarXvar$max && refXvar$min > tarXvar$min && refXvar$max > tarXvar$max)
+    #       tarXvar$min <- refXvar$min
+    #     else if(refXvar$max < tarXvar$max && refXvar$max > tarXvar$min && refXvar$min < tarXvar$min)
+    #       tarXvar$max <- refXvar$max
+    scaleFactorX <- (refXvar$max - refXvar$min)/(tarXvar$max - tarXvar$min)
+    
+    #performs the scalling
+    target[,2] <- target[,2] * (1 + scaleFactorY)
+    target[,1] <- target[,1] * scaleFactorX
+    
+    #if the X coordinates changed, interpolates the points in order to obtain interger coordinates in X
+    if(scaleFactorX != 1)
+      target <- interpolateXinteger(target)
+    
+    #performs the translation in X
+    translationFactorX <- reference[which.max(reference[,2]),1] - target[which.max(target[,2]),1]
+    target[,1] <- target[,1] + translationFactorX
+    
+    #computes the distance
+    distances <- dist.p2p(reference, target)
+    #performs the translation in Y
+    translationFactorY <- mean(distances)
+    target[,2] <- target[,2] + translationFactorY
+    
+    #measures the distances for each point
+    target <- interpolateXinteger(target)
+    distances <- dist.p2p(reference, target)
+    
+    #checks whether the curves got too far
+    if(commonDomain(reference, target) >= threshold)
+      #if they didn't, measures the error
+      error <- mean(abs(distances))
+    else
+      #otherwise, sets the erro to the prime error plus 1
+      error <- primeError + 1
+    
+    #cat("Iteration ", i, "; error = ", error, "\n")
+    #increasing the iteration index
+    i <- i + 1
+  }
+  #returns the informations
+  #if(by == "mean")
+  #primeError <- mean(abs(distances))
+  #else if(by == "cosine")
+  #primeError <- cosineDist(reference[,2], target[,2])
+  (list(target = primeTarget, error = primeError, energyTotal = energy, energyMean = (energy/(i - 1))))
+}
+
 # Computes the common domain between two lines/curves.
 # This is given by the number of points whose domains belongs to
 # both lines/curves.
