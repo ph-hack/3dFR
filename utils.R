@@ -63,3 +63,35 @@ count_found <- function(logFile){
   
   (list(found=founds, missed=missed))
 }
+
+#' Returns a vector containing all the classes for a given directory
+#' or vector of strings wth the file names.
+#' The class information is retrieved from the file names
+#' @example
+#' from the file '02463d660.txt', the returned class is '02463'
+getClassFromFiles <- function(directory=0, files=0){
+  
+  # if the directory is given, ...
+  if(directory[1] != 0){
+    
+    files <- dir(directory)
+  }
+  
+  fileClasses <- getPersonID(files)
+  classes <- unique(fileClasses)
+  
+  (list(classes=classes, fileClasses=fileClasses))
+}
+
+#' Converts a list containing some set of descriptors to a matrix
+descriptors2matrix <- function(descriptors){
+  
+  m <- Reduce(function(y, x){
+    if(y == 0){
+      return (matrix(x, nrow=1))
+    }
+    return(rbind(y, matrix(x, nrow=1)))
+  },  descriptors, 0)
+  
+  (m)
+}
