@@ -364,3 +364,16 @@ differenceVector <- function(data){
   #returns the result
   (diff)
 }
+
+#' Converts a list containing some set of values to a matrix
+list2matrix <- function(l){
+  
+  m <- Reduce(function(y, x){
+    if(y[1] == 0){
+      return (matrix(x, nrow=1))
+    }
+    return(rbind(y, matrix(x, nrow=1)))
+  },  l, 0)
+  
+  (m)
+}

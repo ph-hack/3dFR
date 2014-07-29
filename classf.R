@@ -914,5 +914,52 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
   
   training <- dir(trainingDir)
   
+  #retrieves the classes information
+  classes <- getClassFromFiles(training)
   
+  descriptors <- lapply(concatenate(list(trainingDir, training)), readMainLines, "list")
+  
+  N <- length(descriptors[[1]])
+  C <- length(classes)
+  
+  leefs <- list()
+  
+  #creates the first C nodes, where C = number of classes
+  for(i in 1:N){
+    
+    #separates only the vectors for the ith descriptors
+    samples <- getAllFieldFromList(descriptors, i, 2)
+    #puts them into a matrix
+    samples <- list2matrix(samples)
+    
+    node <- list()
+    
+    for(j in 1:C){
+      
+      thisClassSamplesIndex <- which(classes$fileClasses == classes$classes[j])
+      thisClassSamples <- samples[thisClassSamplesIndex,]
+      
+      node[["samples"]] <- thisClassSamples
+      
+      meanClassSample <- colMeans(thisClassSamples)
+      
+      node[["representant"]] <- meanClassSample
+      
+      #compute the mean error and the mean error kind
+      icpResults <- apply(thisClassSamples, 1, function(target, reference){
+        
+        return (my.icp.2d.v2(curveCorrection3(target, reference), reference))
+        
+      }, meanClassSample)
+      
+      errors <- getAllFieldFromList(icpResults, "error", 2)
+      dists <- getAllFieldFromList(icpResults, "dist", 2)
+      dists <- lsit2matrix(dists)
+      
+      node[["meanError"]] <- mean(errors)
+      node[["maxError"]] <- max(errors)
+      node[["maxError"]] <- node[["maxError"]] * 1.2
+      node[["errorType"]] <- mean(dists)
+    }
+  }
 }

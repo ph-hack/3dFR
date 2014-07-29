@@ -74,6 +74,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   
   #initializes the prime error that will always be equal or less than error
   primeError <- error
+  primeDistances <- distances
   #initializes the iteration index with 1
   i <- 1
   #initializes the energy with 0
@@ -89,6 +90,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
       primeError <- error
       #remembers the prime target, that will always have the least error
       primeTarget <- target
+      primeDistances <- distances
     }
     #sums the error into the energy
     energy <- energy + primeError
@@ -163,7 +165,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     i <- i + 1
   }
   #returns the informations
-  (list(target = primeTarget, error = primeError, energyTotal = energy, energyMean = (energy/(i - 1))))
+  (list(target = primeTarget, dist = distances, error = primeError, energyTotal = energy, energyMean = (energy/(i - 1))))
 }
 
 # Compares 2 lines (curves) by better matching them throught linear transformations

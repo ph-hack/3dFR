@@ -82,16 +82,3 @@ getClassFromFiles <- function(directory=0, files=0){
   
   (list(classes=classes, fileClasses=fileClasses))
 }
-
-#' Converts a list containing some set of descriptors to a matrix
-descriptors2matrix <- function(descriptors){
-  
-  m <- Reduce(function(y, x){
-    if(y == 0){
-      return (matrix(x, nrow=1))
-    }
-    return(rbind(y, matrix(x, nrow=1)))
-  },  descriptors, 0)
-  
-  (m)
-}
