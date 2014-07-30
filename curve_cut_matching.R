@@ -370,6 +370,11 @@ commonDomain <- function(reference, target, isOpt=FALSE){
   (k)
 }
 
+difference <- function(x, y){
+  
+  return (x - y);
+}
+
 # Computes the distance in 'y' for each point by the target's coordinate
 dist.p2p <- function(reference, target, isOpt=FALSE){
   
@@ -470,6 +475,41 @@ rotateCurve <- function(curve, referenceX, angle, isOpt=FALSE){
   (curve)
 }
 
+#discretizePoint <- function(x1, y1, x2, y2, m){
+discretizePoint <- function(xs, m){
+  
+  i <- Position(function(x){return(x > xs)}, m[,1])
+  
+  if(is.na(i))
+    i <- length(m[,1])
+  else if(i == 1)
+    i <- 2
+  
+  #cat("i:", i, " mi-1:", m[i-1,], " mi:", m[i,], "\n")
+  
+  if(xs == m[i,1])
+    return(m[i,])
+  
+  line <- findLine(m[i-1,], m[i,])
+  
+  y <- appLinear(line, xs)
+  
+  return(c(xs, y))
+  
+  #   if(x1 + 0.5 < x2){
+  #     #computes the line which passes through the 'i'th point and its successor
+  #     line <- findLine(c(x1, y1), c(x2, y2))
+  #     
+  #     #finds the correspoding value (2nd column) to this new domain value
+  #     x <- round(x1)
+  #     y <- appLinear(line, x)
+  #     #applies the results
+  #     return (c(x,y))
+  #   }
+  #   else
+  #     return (c(x1,y1))
+}
+
 # Interpolates the signal m, a 2D matrix, in a way that all 'x's (1st column)
 # will be integers.
 # input:
@@ -485,17 +525,18 @@ interpolateXinteger <- function(m, isOpt=FALSE){
   if(isOpt){
     
     x <- floor(m[1,1])
-    N <- floor(m[n,1]) - x
+    #N <- floor(m[n,1]) - x
     
-    if(AND(m[,1] != floor(m[,1])))
+    if(!AND(m[,1] == x:(x + n - 1))){
       
       #m2 <- t(mapply(discretizePoint, m[1:(n-1),1], m[1:(n-1),2], m[2:n,1], m[2:n,2]))
-      m2 <- t(mapply(discretizePoint, x:(x + N - 1), MoreArgs=list(m = m)))
-    #return(m2)
+      m2 <- t(mapply(discretizePoint, x:(x + n - 1), MoreArgs=list(m = m)))
+      return(m2)
+    }
     else
       return (m)
   }
-  else
+  else{
     #for each point, but the last...
     for(i in 1:(n-1)){
       
@@ -521,18 +562,23 @@ interpolateXinteger <- function(m, isOpt=FALSE){
   
   if(abs(m[n-1,1] - m[n,1]) >= 0.5){
     
-    x <- floor(m[n,1])
+#     x <- 0
+#     if(isOpt)
+#       x <- m2[n-1,1] + 1
+#     else
+      x <- ceiling(m[n,1])
+    
     y <- appLinear(line, x)
     m[n,1] <- x
     m[n,2] <- y
-  }
+  }}
   
   #returns the interpolated curve
-  if(isOpt)
-    m <- rbind(m2, m[n,])
+#   if(isOpt)
+#     m <- rbind(m2, m[n,])
   
   #removes the remaining floating domains
   #m <- m[which(m[,1] == ceiling(m[,1])),]
-  
+
   (m)
 }

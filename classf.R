@@ -535,7 +535,7 @@ ICPClassf <- function(trainingDir, testDir, closest="", method="election", by="e
     
     for(j in 1:m){ #for each training image
       
-      #cat("with the training ", training[j], "\n", file=logFile, append=TRUE)
+      #cat("with the ", j, " training ", training[j], "\n", file=logFile, append=TRUE)
       
       #reads the jth training image
       trainingImg <- readMainLines(paste(trainingDir, training[j], sep=""), "list")
@@ -915,12 +915,12 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
   training <- dir(trainingDir)
   
   #retrieves the classes information
-  classes <- getClassFromFiles(training)
+  classes <- getClassFromFiles(files=training)
   
   descriptors <- lapply(concatenate(list(trainingDir, training)), readMainLines, "list")
   
   N <- length(descriptors[[1]])
-  C <- length(classes)
+  C <- length(classes$classes)
   
   leefs <- list()
   
@@ -948,11 +948,11 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
       #compute the mean error and the mean error kind
       icpResults <- apply(thisClassSamples, 1, function(target, reference){
         
-        return (my.icp.2d.v2(curveCorrection3(target, reference), reference))
+        return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.33))
         
       }, meanClassSample)
       
-      errors <- getAllFieldFromList(icpResults, "error", 2)
+      errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
       dists <- getAllFieldFromList(icpResults, "dist", 2)
       dists <- lsit2matrix(dists)
       

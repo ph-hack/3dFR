@@ -1063,41 +1063,6 @@ rotation.factors <- function(distances, reference, target){
     (list(p=0, angle=0))
 }
 
-#discretizePoint <- function(x1, y1, x2, y2, m){
-discretizePoint <- function(xs, m){
-  
-  i <- Position(function(x){return(x > xs)}, m[,1])
-  
-  if(is.na(i))
-    i <- length(m[,1])
-  else if(i == 1)
-    i <- 2
-  
-  #cat("i:", i, " mi-1:", m[i-1,], " mi:", m[i,], "\n")
-  
-  if(xs == m[i,1])
-    return(m[i,])
-  
-  line <- findLine(m[i-1,], m[i,])
-  
-  y <- appLinear(line, xs)
-  
-  return(c(xs, y))
-  
-#   if(x1 + 0.5 < x2){
-#     #computes the line which passes through the 'i'th point and its successor
-#     line <- findLine(c(x1, y1), c(x2, y2))
-#     
-#     #finds the correspoding value (2nd column) to this new domain value
-#     x <- round(x1)
-#     y <- appLinear(line, x)
-#     #applies the results
-#     return (c(x,y))
-#   }
-#   else
-#     return (c(x1,y1))
-}
-
 # Computes the scale factor to approach the target curve
 # to the reference curve by performing a translation.
 # input:
@@ -1226,11 +1191,6 @@ factor.p2p <- function(reference, target, distances){
   }
   
   (factors)
-}
-
-difference <- function(x, y){
-  
-  return (x - y);
 }
 
 # Reads the main Lines from file returning either a vector or a list
