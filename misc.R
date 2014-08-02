@@ -377,3 +377,17 @@ list2matrix <- function(l){
   
   (m)
 }
+
+#' Checks if a number has passed a limit, if it has
+#' returns that limit. Otherwise, returns that number.
+#' the type can be 'lower' (default) or 'upper'.
+limit <- function(x, limit, type="lower"){
+  
+  if(type == "lower" && x < limit)
+    return(limit)
+  
+  else if(type == "upper" && x > limit)
+    return(limit)
+  
+  return(x)
+}

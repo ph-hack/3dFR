@@ -922,19 +922,19 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
   N <- length(descriptors[[1]])
   C <- length(classes$classes)
   
-  leefs <- list()
-  
   #creates the first C nodes, where C = number of classes
   for(i in 1:N){
+    
+    leefs <- list()
     
     #separates only the vectors for the ith descriptors
     samples <- getAllFieldFromList(descriptors, i, 2)
     #puts them into a matrix
     samples <- list2matrix(samples)
     
-    node <- list()
-    
     for(j in 1:C){
+      
+      node <- list()
       
       thisClassSamplesIndex <- which(classes$fileClasses == classes$classes[j])
       thisClassSamples <- samples[thisClassSamplesIndex,]
@@ -953,13 +953,17 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
       }, meanClassSample)
       
       errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
-      dists <- getAllFieldFromList(icpResults, "dist", 2)
-      dists <- lsit2matrix(dists)
+      #dists <- getAllFieldFromList(icpResults, "dist", 2)
+      #dists <- list2matrix(dists)
       
       node[["meanError"]] <- mean(errors)
       node[["maxError"]] <- max(errors)
       node[["maxError"]] <- node[["maxError"]] * 1.2
-      node[["errorType"]] <- mean(dists)
+      #node[["errorType"]] <- mean(dists)
+      
+      leafs[[classes$classes[j]]] <- node
     }
+    
+    
   }
 }

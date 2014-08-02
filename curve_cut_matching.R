@@ -108,17 +108,17 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     translationFactorX <- 0
     translationFactorY <- 0
     
-    if(FALSE){
+    if(isOpt){
       
       data <- list(target = target, reference = reference, translationFactorX = 0, translationFactorY = 0)
       
       data <- Reduce(function(data, sample){
         
-        dists <- as.matrix(dist(rbind(target[sample,], reference)))[1,-1]
+        dists <- as.matrix(dist(rbind(data$target[sample,], data$reference)))[1,-1]
         k <- which.min(dists)
         
-        data$translationFactorX <- data$translationFactorX + reference[k,1] - target[sample,1]
-        data$translationFactorY <- data$translationFactorY + reference[k,2] - target[sample,2]
+        data$translationFactorX <- data$translationFactorX + data$reference[k,1] - data$target[sample,1]
+        data$translationFactorY <- data$translationFactorY + data$reference[k,2] - data$target[sample,2]
         
         return (data)
       }, samples, data)
@@ -165,7 +165,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     i <- i + 1
   }
   #returns the informations
-  (list(target = primeTarget, dist = distances, error = primeError, energyTotal = energy, energyMean = (energy/(i - 1))))
+  (list(target = primeTarget, dist = primeDistances, error = primeError, energyTotal = energy, energyMean = (energy/(i - 1))))
 }
 
 # Compares 2 lines (curves) by better matching them throught linear transformations
@@ -375,6 +375,38 @@ difference <- function(x, y){
   return (x - y);
 }
 
+difference2 <- function(x, y, ix, iy, mx=0, my=0){
+  
+  dif <- x - y
+  ix <- which(mx[,1] == ix)
+  iy <- which(my[,1] == iy)
+  if(is.matrix(mx) && is.matrix(my)){
+    
+    if(abs(dif) <= 1)
+      return(dif)
+    else{
+      
+      n <- floor(abs(dif))
+      candidates <- limit(ix-n, 1, "lower"):limit(ix+n, length(mx[,2]), "upper")
+      
+      #cat("candidates: ", candidates, "mx dims:", dim(mx), "\n")
+      
+      if(dif < 0){
+        candidates <- candidates[which(mx[candidates,2] >= y + dif)]
+        dists <- as.matrix(dist(rbind(my[iy,], mx[candidates,])))[1,-1]
+        return(-min(dists))
+      }
+      else{
+        candidates <- candidates[which(mx[candidates,2] <= y + dif)]
+        dists <- as.matrix(dist(rbind(my[iy,], mx[candidates,])))[1,-1]
+        return(min(dists))
+      }
+    }
+  }
+  else
+    return(dif)
+}
+
 # Computes the distance in 'y' for each point by the target's coordinate
 dist.p2p <- function(reference, target, isOpt=FALSE){
   
@@ -393,7 +425,8 @@ dist.p2p <- function(reference, target, isOpt=FALSE){
     ref <- (Position(function(x){return(x == xmin)}, reference[,1]):Position(function(x){return(x == xmax)}, reference[,1]))
     tar <- (Position(function(x){return(x == xmin)}, target[,1]):Position(function(x){return(x == xmax)}, target[,1]))
     
-    distances <- mapply(difference, reference[ref,2], target[tar,2])
+    #distances <- mapply(difference, reference[ref,2], target[tar,2])
+    distances <- mapply(difference2, reference[ref,2], target[tar,2], reference[ref,1], target[tar,1], MoreArgs=list(reference, target))
   }
   else
     for(i in 1:n){
