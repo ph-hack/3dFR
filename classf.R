@@ -925,7 +925,7 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
   #creates the first C nodes, where C = number of classes
   for(i in 1:N){
     
-    leefs <- list()
+    leafs <- list()
     
     #separates only the vectors for the ith descriptors
     samples <- getAllFieldFromList(descriptors, i, 2)
@@ -948,7 +948,7 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
       #compute the mean error and the mean error kind
       icpResults <- apply(thisClassSamples, 1, function(target, reference){
         
-        return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.33))
+        return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.33, minIter=2))
         
       }, meanClassSample)
       
@@ -964,6 +964,43 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
       leafs[[classes$classes[j]]] <- node
     }
     
+    nGroups <- floor(C/6)
+    similarityMatrix <- matrix(rep(0, C*C), nrow=C)
     
+    for(j in 1:(C-1)){
+      for(k in (j+1):C){
+        
+        similarityMatrix[j,k] <- my.icp.2d.v2(leafs[[classes$classes[j]]][["representant"]],
+                                              leafs[[classes$classes[k]]][["representant"]], minIter=2, pSample=0.33)
+        similarityMatrix[k,j] <- similarityMatrix[i,k]
+      }
+    }
+    
+    similarityMatrix <- apply(similarityMatrix, 1, rank, list(ties.method = "random"))
+    
+    for(j in 1:(C-1)){
+      for(k in (j+1):C){
+      
+        similarityMatrix[j,k] <- mean(similarityMatrix[j,k], similarityMatrix[k,j])
+        similarityMatrix[k,j] <- similarityMatrix[j,k]
+      }
+    }
+    
+    threshold <- ceiling(C/nGroups)
+    groups <- list()
+    
+    groups[[classes$classes[1]]] <- 1
+    groupIndex <- 2
+    
+    for(j in 2:C){
+      
+      zero <- Find(function(x){return(x == 0)}, similarityMatrix[j,])
+      similarityMatrix[j,zero] <- C
+      closer <- similarityMatrix[j,which.min(similarityMatrix[j,])]
+      if(closer <= threshold){
+        
+        
+      }
+    }
   }
 }
