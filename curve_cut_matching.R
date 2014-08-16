@@ -367,7 +367,7 @@ commonDomain <- function(reference, target, isOpt=FALSE){
     }
   
   #returns the result
-  (k)
+  return(limit(k, 0, "lower"))
 }
 
 difference <- function(x, y){
