@@ -391,3 +391,11 @@ limit <- function(x, limit, type="lower"){
   
   return(x)
 }
+
+getDirectory <- function(fileName){
+
+  chars <- strsplit(fileName, "")[[1]]
+  pos <- Position(function(x){return(x == "/")}, chars, right=TRUE)
+  path <- substr(fileName, 1, pos)
+  return(path)
+}

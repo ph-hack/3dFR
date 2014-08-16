@@ -378,8 +378,8 @@ difference <- function(x, y){
 difference2 <- function(x, y, ix, iy, mx=0, my=0){
   
   dif <- x - y
-  ix <- which(mx[,1] == ix)
-  iy <- which(my[,1] == iy)
+  #ix <- which(mx[,1] == ix)
+  #iy <- which(my[,1] == iy)
   if(is.matrix(mx) && is.matrix(my)){
     
     if(abs(dif) <= 1)
@@ -388,16 +388,24 @@ difference2 <- function(x, y, ix, iy, mx=0, my=0){
       
       n <- floor(abs(dif))
       candidates <- limit(ix-n, 1, "lower"):limit(ix+n, length(mx[,2]), "upper")
-      
+      cand <- candidates
       #cat("candidates: ", candidates, "mx dims:", dim(mx), "\n")
       
       if(dif < 0){
-        candidates <- candidates[which(mx[candidates,2] >= y + dif)]
+        candidates <- candidates[which(mx[candidates,2] >= x)]
+	
+	if(length(candidates) == 1)
+	   return(dif)
+
         dists <- as.matrix(dist(rbind(my[iy,], mx[candidates,])))[1,-1]
         return(-min(dists))
       }
       else{
-        candidates <- candidates[which(mx[candidates,2] <= y + dif)]
+        candidates <- candidates[which(mx[candidates,2] <= x)]
+
+	if(length(candidates) == 1)
+	   return(dif)
+
         dists <- as.matrix(dist(rbind(my[iy,], mx[candidates,])))[1,-1]
         return(min(dists))
       }
@@ -426,7 +434,8 @@ dist.p2p <- function(reference, target, isOpt=FALSE){
     tar <- (Position(function(x){return(x == xmin)}, target[,1]):Position(function(x){return(x == xmax)}, target[,1]))
     
     #distances <- mapply(difference, reference[ref,2], target[tar,2])
-    distances <- mapply(difference2, reference[ref,2], target[tar,2], reference[ref,1], target[tar,1], MoreArgs=list(reference, target))
+    #distances <- mapply(difference2, reference[ref,2], target[tar,2], reference[ref,1], target[tar,1], MoreArgs=list(reference, target))
+    distances <- mapply(difference2, reference[ref,2], target[tar,2], ref, tar, MoreArgs=list(reference, target))
   }
   else
     for(i in 1:n){
@@ -502,7 +511,7 @@ rotateCurve <- function(curve, referenceX, angle, isOpt=FALSE){
   curve[,1] <- curve[,1] + referenceX
   
   #interpolates the curve to make sure all 1st column coordinates will be integers
-  curve <- interpolateXinteger(curve)
+  #curve <- interpolateXinteger(curve)
   
   #returns the curve rotated
   (curve)
@@ -514,7 +523,9 @@ discretizePoint <- function(xs, m){
   i <- Position(function(x){return(x > xs)}, m[,1])
   
   if(is.na(i))
-    i <- length(m[,1])
+    #i <- length(m[,1])
+    #i <- which.max(m[,1])
+    return(c(max(m[,1]), NA))
   else if(i == 1)
     i <- 2
   
@@ -564,6 +575,7 @@ interpolateXinteger <- function(m, isOpt=FALSE){
       
       #m2 <- t(mapply(discretizePoint, m[1:(n-1),1], m[1:(n-1),2], m[2:n,1], m[2:n,2]))
       m2 <- t(mapply(discretizePoint, x:(x + n - 1), MoreArgs=list(m = m)))
+      m2 <- m2[which(!is.na(m2[,2])),]
       return(m2)
     }
     else

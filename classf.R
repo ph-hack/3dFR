@@ -476,10 +476,10 @@ ICPClassf <- function(trainingDir, testDir, closest="", method="election", by="e
   if(length(trainingDir) == 1)
     training <- dir(trainingDir)
   else
-    trainingDir <- ""
+    trainingDir <- getDirectory(training[1])
   
   test <- testDir
-  if(!is.file(testDir))
+  if(length(testDir) == 1)
     test <- dir(testDir)
   else
     testDir <- ""
@@ -535,7 +535,7 @@ ICPClassf <- function(trainingDir, testDir, closest="", method="election", by="e
     
     for(j in 1:m){ #for each training image
       
-      #cat("with the ", j, " training ", training[j], "\n", file=logFile, append=TRUE)
+      cat("with the ", j, " training ", training[j], "\n", file=logFile, append=TRUE)
       
       #reads the jth training image
       trainingImg <- readMainLines(paste(trainingDir, training[j], sep=""), "list")
