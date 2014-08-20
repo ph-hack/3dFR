@@ -964,9 +964,11 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
       leafs[[classes$classes[j]]] <- node
     }
     
+    #determine the maximum number of groups for the level 1
     nGroups <- floor(C/6)
+    #initiates the similarity matrix
     similarityMatrix <- matrix(rep(0, C*C), nrow=C)
-    
+    #computes the similarity matrix with the C representants
     for(j in 1:(C-1)){
       for(k in (j+1):C){
         
@@ -975,9 +977,10 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
         similarityMatrix[k,j] <- similarityMatrix[i,k]
       }
     }
-    
-    similarityMatrix <- apply(similarityMatrix, 1, rank, list(ties.method = "random"))
-    
+    #computes the rank of similarity for the whole matrix
+    similarityMatrix <- t(apply(similarityMatrix, 1, rank, ties.method = "random"))
+    similarityMatrix <- similarityMatrix - 1
+    #computes the similarity index instead of the ranking
     for(j in 1:(C-1)){
       for(k in (j+1):C){
       
@@ -985,22 +988,57 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
         similarityMatrix[k,j] <- similarityMatrix[j,k]
       }
     }
-    
+    #determines the thresholding on the similarity index for grouping
     threshold <- ceiling(C/nGroups)
-    groups <- list()
+    groups <- rep(0, C)
     
-    groups[[classes$classes[1]]] <- 1
+    #puts the first representant into the first group
+    groups[1] <- 1
     groupIndex <- 2
+    
+    #exchanges all zeros by the greatest possible value
+    similarityMatrix[which(similarityMatrix == 0)] <- C + 1
     
     for(j in 2:C){
       
-      zero <- Find(function(x){return(x == 0)}, similarityMatrix[j,])
-      similarityMatrix[j,zero] <- C
-      closer <- similarityMatrix[j,which.min(similarityMatrix[j,])]
-      if(closer <= threshold){
+      #gets the jth similarity index information
+      closest <- matrix(c(1:C, similarityMatrix[j,]), ncol=2)
+      #sort them in ascending order, so the closest representant will be at the first places
+      closest <- closest[order(closest[,2]),]
+      
+      #iniates a flux control flag
+      done <- FALSE
+      index <- 1
+      
+      while(!done){
         
+        value <- closest[index, 2]
         
+        #if this value is smaller or equal than the threshold, ...
+        if(value <= threshold){
+          #and if closest already has a group, ...
+          if(groups[closest[index, 1]] != 0){
+            
+            #assigns the group of the closest to it
+            groups[j] <- groups[closest]
+            done <- TRUE
+          }
+          else{
+            
+            #increases the closest index
+            index <- index + 1
+          }
+        }
+        else{
+          
+          #creates a new group and assigns it to this representant
+          groups[j] <- groupIndex
+          groupIndex <- groupIndex + 1
+          done <- TRUE
+        }
       }
     }
+    #does the real grouping
+    firstLevel <- 
   }
 }
