@@ -984,12 +984,12 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
     for(j in 1:(C-1)){
       for(k in (j+1):C){
       
-        similarityMatrix[j,k] <- mean(similarityMatrix[j,k], similarityMatrix[k,j])
+        similarityMatrix[j,k] <- mean(c(similarityMatrix[j,k], similarityMatrix[k,j]))
         similarityMatrix[k,j] <- similarityMatrix[j,k]
       }
     }
     #determines the thresholding on the similarity index for grouping
-    threshold <- ceiling(C/nGroups)
+    threshold <- C/nGroups
     groups <- rep(0, C)
     
     #puts the first representant into the first group
@@ -1001,44 +1001,44 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
     
     for(j in 2:C){
       
-      #gets the jth similarity index information
-      closest <- matrix(c(1:C, similarityMatrix[j,]), ncol=2)
-      #sort them in ascending order, so the closest representant will be at the first places
-      closest <- closest[order(closest[,2]),]
+      #gets the closest representant
+      closest <- which.min(similarityMatrix[j,])
+      #gets the similarity index for the closest
+      value <- similarityMatrix[j,closest]
       
-      #iniates a flux control flag
-      done <- FALSE
-      index <- 1
+      if(groups[j] == 0){
       
-      while(!done){
-        
-        value <- closest[index, 2]
-        
         #if this value is smaller or equal than the threshold, ...
         if(value <= threshold){
           #and if closest already has a group, ...
-          if(groups[closest[index, 1]] != 0){
+          if(groups[closest] != 0){
             
             #assigns the group of the closest to it
             groups[j] <- groups[closest]
-            done <- TRUE
           }
           else{
             
-            #increases the closest index
-            index <- index + 1
+            #creates a new group and assigns it to this representant
+            groups[j] <- groupIndex
+            #and to its closest
+            groups[closest] <- groupIndex
+            #updates group index
+            groupIndex <- groupIndex + 1
           }
         }
         else{
           
-          #creates a new group and assigns it to this representant
-          groups[j] <- groupIndex
-          groupIndex <- groupIndex + 1
-          done <- TRUE
+          #if it is allowed to create another group
+          if(groupIndex <= nGroups){
+            #creates a new group and assigns it to this representant
+            groups[j] <- groupIndex
+            #updates the group index
+            groupIndex <- groupIndex + 1
+          }
         }
       }
     }
-    #does the real grouping
+    #mounts the first level
     firstLevel <- 
   }
 }
