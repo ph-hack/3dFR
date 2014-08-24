@@ -922,101 +922,154 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
   N <- length(descriptors[[1]])
   C <- length(classes$classes)
   
-  #creates the first C nodes, where C = number of classes
   for(i in 1:N){
-    
-    leafs <- list()
     
     #separates only the vectors for the ith descriptors
     samples <- getAllFieldFromList(descriptors, i, 2)
     #puts them into a matrix
     samples <- list2matrix(samples)
+  
+    #creates the first C nodes, where C = number of classes
+    leafs <- computeNodes(samples, classes$fileClasses)
+    #devides the leafs into groups
+    groups <- computeGrouping(leafs, "brute")
     
-    for(j in 1:C){
-      
-      node <- list()
-      
-      thisClassSamplesIndex <- which(classes$fileClasses == classes$classes[j])
-      thisClassSamples <- samples[thisClassSamplesIndex,]
-      
-      node[["samples"]] <- thisClassSamples
-      
-      meanClassSample <- colMeans(thisClassSamples)
-      
-      node[["representant"]] <- meanClassSample
-      
-      #compute the mean error and the mean error kind
-      icpResults <- apply(thisClassSamples, 1, function(target, reference){
-        
-        return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.33, minIter=2))
-        
-      }, meanClassSample)
-      
-      errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
-      #dists <- getAllFieldFromList(icpResults, "dist", 2)
-      #dists <- list2matrix(dists)
-      
-      node[["meanError"]] <- mean(errors)
-      node[["maxError"]] <- max(errors)
-      node[["maxError"]] <- node[["maxError"]] * 1.2
-      #node[["errorType"]] <- mean(dists)
-      
-      leafs[[classes$classes[j]]] <- node
-    }
+    #mounts the first level
+    firstLevel <- ""
+  }
+}
+
+computeNodes <- function(samples, groups, progress=FALSE){
+  
+  g <- unique(groups)
+  G <- length(g)
+  
+  levels <- list()
+  
+  for(j in 1:G){
     
-    #determine the maximum number of groups for the level 1
+    node <- list()
+    
+    thisClassSamplesIndex <- which(groups == g[j])
+    thisClassSamples <- samples[thisClassSamplesIndex,]
+    
+    node[["samples"]] <- thisClassSamples
+    
+    meanClassSample <- colMeans(thisClassSamples)
+    
+    node[["representant"]] <- meanClassSample
+    
+    #compute the mean error and the mean error kind
+    icpResults <- apply(thisClassSamples, 1, function(target, reference){
+      
+      return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.33, minIter=2))
+      
+    }, meanClassSample)
+    
+    errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
+    #dists <- getAllFieldFromList(icpResults, "dist", 2)
+    #dists <- list2matrix(dists)
+    
+    node[["meanError"]] <- mean(errors)
+    node[["maxError"]] <- max(errors)
+    node[["maxError"]] <- node[["maxError"]] * 1.2
+    #node[["errorType"]] <- mean(dists)
+    
+    levels[[j]] <- node
+    
+    if(progress)
+      cat(j*100/G, "%\n")
+  }
+  
+  return(levels)
+}
+
+computeGrouping <- function(nodes, mode, nGroups=0, threshold=0, progress=FALSE){
+  
+  C <- length(nodes)
+  
+  #determine the maximum number of groups for the level 1
+  if(nGroups <= 0)
     nGroups <- floor(C/6)
-    #initiates the similarity matrix
-    similarityMatrix <- matrix(rep(0, C*C), nrow=C)
-    #computes the similarity matrix with the C representants
-    for(j in 1:(C-1)){
-      for(k in (j+1):C){
-        
-        similarityMatrix[j,k] <- my.icp.2d.v2(leafs[[classes$classes[j]]][["representant"]],
-                                              leafs[[classes$classes[k]]][["representant"]], minIter=2, pSample=0.33)
-        similarityMatrix[k,j] <- similarityMatrix[i,k]
-      }
-    }
-    #computes the rank of similarity for the whole matrix
-    similarityMatrix <- t(apply(similarityMatrix, 1, rank, ties.method = "random"))
-    similarityMatrix <- similarityMatrix - 1
-    #computes the similarity index instead of the ranking
-    for(j in 1:(C-1)){
-      for(k in (j+1):C){
-      
-        similarityMatrix[j,k] <- mean(c(similarityMatrix[j,k], similarityMatrix[k,j]))
-        similarityMatrix[k,j] <- similarityMatrix[j,k]
-      }
-    }
-    #determines the thresholding on the similarity index for grouping
+  
+  #determines the thresholding on the similarity index for grouping
+  if(threshold <= 0)
     threshold <- C/nGroups
-    groups <- rep(0, C)
+  
+  if(mode == "brute"){
     
-    #puts the first representant into the first group
-    groups[1] <- 1
-    groupIndex <- 2
+    return( computeGroupingByBrute(nodes, nGroups, threshold, progress))
+  }
+  else if(mode == "Kmeans"){
     
-    #exchanges all zeros by the greatest possible value
-    similarityMatrix[which(similarityMatrix == 0)] <- C + 1
-    
-    for(j in 2:C){
+    return( computeGroupingByKmeans(nodes, nGroups, threshold))
+  }
+}
+
+computeGroupingByBrute <- function(nodes, nGroups=0, threshold=0, progress=FALSE){
+  
+  C <- length(nodes)
+  
+  #initiates the similarity matrix
+  similarityMatrix <- matrix(rep(0, C*C), nrow=C)
+  n <- computeNumberOfCombinations(C, 2)
+  m <- 1
+  #computes the similarity matrix with the C representants
+  for(j in 1:(C-1)){
+    for(k in (j+1):C){
       
+      similarityMatrix[j,k] <- my.icp.2d.v2(nodes[[j]][["representant"]],
+                                            nodes[[k]][["representant"]], minIter=5, pSample=0.33)$error
+      similarityMatrix[k,j] <- similarityMatrix[i,k]
+      
+      if(progress){
+        cat("computing similarity:", m*100/n, "%\n")
+        m <- m + 1
+      }
+    }
+  }
+  #print(similarityMatrix)
+  #computes the rank of similarity for the whole matrix
+  similarityMatrix <- t(apply(similarityMatrix, 1, rank, ties.method = "random"))
+  similarityMatrix <- similarityMatrix - 1
+  #computes the similarity index instead of the ranking
+  for(j in 1:(C-1)){
+    for(k in (j+1):C){
+      
+      similarityMatrix[j,k] <- mean(c(similarityMatrix[j,k], similarityMatrix[k,j]))
+      similarityMatrix[k,j] <- similarityMatrix[j,k]
+    }
+  }
+  print(similarityMatrix)
+  groups <- rep(0, C)
+  
+  #puts the first representant into the first group
+  groups[1] <- 1
+  groupIndex <- 2
+  
+  #exchanges all zeros by the greatest possible value
+  similarityMatrix[which(similarityMatrix == 0)] <- C + 1
+  
+  for(j in 2:C){
+    
+    while(groups[j] == 0){
       #gets the closest representant
       closest <- which.min(similarityMatrix[j,])
       #gets the similarity index for the closest
       value <- similarityMatrix[j,closest]
       
-      if(groups[j] == 0){
-      
-        #if this value is smaller or equal than the threshold, ...
-        if(value <= threshold){
-          #and if closest already has a group, ...
-          if(groups[closest] != 0){
-            
-            #assigns the group of the closest to it
-            groups[j] <- groups[closest]
-          }
-          else{
+      #if this value is smaller or equal than the threshold, ...
+      if(value <= threshold){
+        #and if closest already has a group, ...
+        if(groups[closest] != 0){
+          
+          #assigns the group of the closest to it
+          groups[j] <- groups[closest]
+        }
+        else{
+          
+          #if it is allowed to create another group, ...
+          if(groupIndex <= nGroups){
             
             #creates a new group and assigns it to this representant
             groups[j] <- groupIndex
@@ -1025,20 +1078,135 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
             #updates group index
             groupIndex <- groupIndex + 1
           }
-        }
-        else{
-          
-          #if it is allowed to create another group
-          if(groupIndex <= nGroups){
-            #creates a new group and assigns it to this representant
-            groups[j] <- groupIndex
-            #updates the group index
-            groupIndex <- groupIndex + 1
+          else{
+            
+            similarityMatrix[j, closest] <- C + 1
           }
         }
       }
+      else{
+        
+        #if it is allowed to create another group
+        if(groupIndex <= nGroups){
+          #creates a new group and assigns it to this representant
+          groups[j] <- groupIndex
+          #updates the group index
+          groupIndex <- groupIndex + 1
+        }
+        else{
+          
+          similarityMatrix[j, closest] <- C + 1
+          similarityMatrix[j,] <- similarityMatrix[j,] - 1
+        }
+      }
     }
-    #mounts the first level
-    firstLevel <- 
+    
+    if(progress)
+      cat("choosing groups:", j*100/C, "%\n")
   }
+  
+  return(groups)
+}
+
+#' Not finished!
+computeGroupingByKmeans <- function(nodes, nGroups, threshold){
+  
+  C <- length(nodes)
+  
+  #chooses the first K candidates as group ****
+  Ks <- sample(1:C, nGroups)
+  
+  #initiates the similarity matrix
+  similarityMatrix <- matrix(rep(0, nGroups*C), nrow=C)
+  
+  #computes the similarity matrix with the C representants
+  for(j in 1:nGroups){
+    
+    representants <- c(1:C)[-Ks[j]]
+    #sets the similiarity measure as 0 for the identity case
+    similarityMatrix[j,Ks[j]] <- 0
+    
+    for(n in representants){
+      
+      similarityMatrix[j,n] <- my.icp.2d.v2(nodes[[Ks[j]]][["representant"]],
+                                            nodes[[n]][["representant"]], minIter=2, pSample=0.33)
+    }
+  }
+  #computes the rank of similarity for the whole matrix
+  similarityMatrix <- t(apply(similarityMatrix, 1, rank, ties.method = "random"))
+  similarityMatrix <- similarityMatrix - 1
+  
+  groups <- rep(0, C)
+  
+  #puts the first representant into the first group
+  groups[Ks[1]] <- 1
+  groupIndex <- 2
+  
+  #exchanges all zeros by the greatest possible value
+  similarityMatrix[which(similarityMatrix == 0)] <- C + 1
+  
+  for(j in 1:nGroups){
+    
+    #gets the closest representant
+    closest <- which.min(similarityMatrix[j,])
+    #checks whether this closest is one of the groups center
+    sameGroup <- Position(function(x){ return(x == closest)}, Ks)
+    #if it is, ...
+    if(!is.na(sameGroup)){
+      
+      #picks the possible candidates for new group center (any which hasn't been picked yet)
+      possibleCandidates <- c(1:C)[-Ks]
+      #randomly chooses the replacement
+      k <- sample(possibleCandidates, 1)
+      #makes the replacement
+      Ks[sameGroup] <- k
+      
+      representants <- c(1:C)[-Ks[sameGroup]]
+      #sets the similiarity measure as 0 for the identity case
+      similarityMatrix[sameGroup,Ks[sameGroup]] <- 0
+      
+      for(n in representants){
+        
+        similarityMatrix[sameGroup,n] <- my.icp.2d.v2(nodes[[Ks[sameGroup]]][["representant"]],
+                                              nodes[[n]][["representant"]], minIter=2, pSample=0.33)
+      }
+    }
+    
+    #gets the similarity index for the closest
+    value <- similarityMatrix[j,closest]
+    
+    if(groups[j] == 0){
+      
+      #if this value is smaller or equal than the threshold, ...
+      if(value <= threshold){
+        #and if closest already has a group, ...
+        if(groups[closest] != 0){
+          
+          #assigns the group of the closest to it
+          groups[j] <- groups[closest]
+        }
+        else{
+          
+          #creates a new group and assigns it to this representant
+          groups[j] <- groupIndex
+          #and to its closest
+          groups[closest] <- groupIndex
+          #updates group index
+          groupIndex <- groupIndex + 1
+        }
+      }
+      else{
+        
+        #if it is allowed to create another group
+        if(groupIndex <= nGroups){
+          #creates a new group and assigns it to this representant
+          groups[j] <- groupIndex
+          #updates the group index
+          groupIndex <- groupIndex + 1
+        }
+      }
+    }
+  }
+  
+  return(groups)
 }

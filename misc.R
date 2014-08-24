@@ -399,3 +399,19 @@ getDirectory <- function(fileName){
   path <- substr(fileName, 1, pos)
   return(path)
 }
+
+computeNumberOfCombinations <- function(n, p){
+  
+#   if(p == 2)
+#     return((n^2 - n)/2)
+#   else
+#     return(factorial(n)/(factorial(p) * factorial(n - p)))
+  x <- 1
+  y <- n
+  for(i in 1:p){
+    
+    x <- x * y
+    y <- y - 1
+  }
+  return(x/factorial(p))
+}
