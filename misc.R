@@ -101,21 +101,39 @@ cosineDist <- function(v1, v2){
 #   will be 10,10,5
 getAllFieldFromList <- function(theList, index=1, level=1){
   
-  n <- length(theList)
-  field <- list()
-  
   if(level > 1){
+    
+    n <- length(theList)
+    field <- list()
     
     for(i in 1:n){
       
       field[[i]] <- getAllFieldFromList(theList[[i]], index, level-1)
     }
+    
+    return(concatenateList(field))
   }
   else{
-    
-    return(theList[[index]])
+    return (list(theList[[index]]))
   }
-  (field)
+}
+
+concatenateList <- function(listOfLists){
+  
+  n <- length(listOfLists)
+  l <- list()
+  
+  for(i in 1:n){
+    
+    m <- length(listOfLists[[i]])
+    
+    for(j in 1:m){
+      
+      l[[(i-1) * m + j]] <- listOfLists[[i]][[j]]
+    }
+  }
+  
+  return(l)
 }
 
 # Samples a specific amount of points from a data set by using k-means algorithm----

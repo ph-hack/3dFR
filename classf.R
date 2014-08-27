@@ -910,6 +910,96 @@ ponderateVote <- function(votes, by="min"){
   (c(uVotes[which.max(results)], max(results)))
 }
 
+hierarquicalFeatureBasedPrediction <- function(model, testDir=""){
+  
+  testing <- dir(testDir)
+  
+  #retrieves the classes information
+  classes <- getClassFromFiles(files=testing)
+  
+  descriptors <- lapply(concatenate(list(testDir, testing)), readMainLines, "list")
+  
+  N <- length(model)
+  M <- length(testing)
+  
+  votes <- list()
+  
+  tests <- list()
+  
+  for(i in 1:N){
+    
+    #separates only the vectors for the ith descriptors
+    samples <- getAllFieldFromList(descriptors, i, 2)
+    #puts them into a matrix
+    samples <- list2matrix(samples)
+    
+    tests[[i]] <- samples
+  }
+  
+  for(m in 1:M){
+    
+    for(i in 1:N){
+      
+      votes[[i]] <- list()
+      vIndex <- 1
+      test <- tests[[i]][m,]
+      
+      #compute the errors for the second level
+      secondLevel <- list2matrix(getAllFieldFromList(model, "representant", 3))
+      icpResults <- apply(secondLevel, 1, function(reference, target){
+        
+        return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.33, minIter=2))
+        
+      }, test)
+      
+      errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
+      maxErrors <- list2vector(getAllFieldFromList(model, "maxError", 3))
+      #retrieves which nodes of the second level matched the test
+      passed2 <- which(errors <= maxErrors)
+      
+      for(j in passed2){
+        
+        #compute the errors for the first level
+        firstLevel <- list2matrix(getAllFieldFromList(model[[i]][[j]]$children, "representant", 2))
+        icpResults <- apply(firstLevel, 1, function(reference, target){
+          
+          return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.33, minIter=2))
+          
+        }, test)
+        
+        errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
+        maxErrors <- list2vector(getAllFieldFromList(model[[i]][[j]]$children, "maxError", 2))
+        #retrieves which nodes of the first level matched the test
+        passed1 <- which(errors <= maxErrors)
+        
+        for(k in passed1){
+          
+          nodes <- model[[i]][[j]]$children[[k]]$children
+          
+          #compute the errors for the leafs
+          firstLevel <- list2matrix(getAllFieldFromList(nodes, "representant", 2))
+          icpResults <- apply(firstLevel, 1, function(reference, target){
+            
+            return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.33, minIter=2))
+            
+          }, test)
+          
+          errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
+          maxErrors <- list2vector(getAllFieldFromList(nodes, "maxError", 2))
+          #retrieves which nodes of the first level matched the test
+          passed <- which(errors <= maxErrors)
+          
+          for(v in passed){
+            
+            votes[[i]][[vIndex]] <- list(id=names(nodes)[v], weight=errors[v])
+            vIndex <- vIndex + 1
+          }
+        }
+      }
+    }
+  }
+}
+
 hieraquicalFeatureBasedClassifier <- function(trainingDir){
   
   training <- dir(trainingDir)
@@ -922,6 +1012,8 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
   N <- length(descriptors[[1]])
   C <- length(classes$classes)
   
+  model <- list()
+  
   for(i in 1:N){
     
     #separates only the vectors for the ith descriptors
@@ -930,16 +1022,25 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
     samples <- list2matrix(samples)
   
     #creates the first C nodes, where C = number of classes
-    leafs <- computeNodes(samples, classes$fileClasses)
-    #devides the leafs into groups
-    groups <- computeGrouping(leafs, "brute")
+    leafs <- computeNodes(samples, classes$fileClasses, progress=TRUE)
     
+    #divides the leafs into groups
+    groups <- computeGrouping(leafs, "brute", 3, progress=TRUE)
     #mounts the first level
-    firstLevel <- ""
+    firstLevel <- computeNodes(list2matrix(getAllFieldFromList(leafs, "representant", 2)), groups, leafs, TRUE)
+    
+    #divides the first level into groups
+    groups <- computeGrouping(firstLevel, "brute")
+    #mounts the second level
+    secondLevel <- computeNodes(list2matrix(getAllFieldFromList(firstLevel, "representant", 2)), groups, firstLevel, TRUE)
+    
+    model[[i]] <- secondLevel
   }
+  
+  return(model)
 }
 
-computeNodes <- function(samples, groups, progress=FALSE){
+computeNodes <- function(samples, groups, children=0, progress=FALSE){
   
   g <- unique(groups)
   G <- length(g)
@@ -975,7 +1076,10 @@ computeNodes <- function(samples, groups, progress=FALSE){
     node[["maxError"]] <- node[["maxError"]] * 1.2
     #node[["errorType"]] <- mean(dists)
     
-    levels[[j]] <- node
+    if(is.list(children))
+      node[["children"]] <- children[thisClassSamplesIndex]
+    
+    levels[[g[j]]] <- node
     
     if(progress)
       cat(j*100/G, "%\n")
