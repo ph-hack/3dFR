@@ -910,45 +910,61 @@ ponderateVote <- function(votes, by="min"){
   (c(uVotes[which.max(results)], max(results)))
 }
 
-hierarquicalFeatureBasedPrediction <- function(model, testDir=""){
+hierarquicalFeatureBasedPrediction <- function(model, testDir="", subset=integer(0)){
   
+  #gets the files' names
   testing <- dir(testDir)
+  
+  if(length(subset) > 0)
+    testing <- testing[subset]
   
   #retrieves the classes information
   classes <- getClassFromFiles(files=testing)
   
+  #gets the descriptors' values for all test samples
   descriptors <- lapply(concatenate(list(testDir, testing)), readMainLines, "list")
   
+  #the number of models, one for each descriptor
   N <- length(model)
+  #the number of testing sample
   M <- length(testing)
-  
-  votes <- list()
   
   tests <- list()
   
+  #for each descriptor, ...
   for(i in 1:N){
     
-    #separates only the vectors for the ith descriptors
+    #separates only the vectors for the ith descriptor
     samples <- getAllFieldFromList(descriptors, i, 2)
     #puts them into a matrix
     samples <- list2matrix(samples)
-    
+    #puts this matrix into tests list
     tests[[i]] <- samples
   }
   
+  corrects <- 0
+  
+  #for each test sample, ...
   for(m in 1:M){
     
+    #initializes the votes as an empty list
+    votes <- list()
+    
+    #for each descriptor, ...
     for(i in 1:N){
       
-      votes[[i]] <- list()
-      vIndex <- 1
+      #initializes this descriptor's votes as a matrix with zeros (these zeros will be ignored later)
+      votes[[i]] <- matrix(c(0,0), nrow=1)
+      
+      #gets the ith descriptor of the mth test sample
       test <- tests[[i]][m,]
       
-      #compute the errors for the second level
-      secondLevel <- list2matrix(getAllFieldFromList(model, "representant", 3))
+      #gets the second level's representants
+      secondLevel <- list2matrix(getAllFieldFromList(model[[i]], "representant", 2))
+      #computes the errors for the second level
       icpResults <- apply(secondLevel, 1, function(reference, target){
         
-        return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.33, minIter=2))
+        return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.2, minIter=4))
         
       }, test)
       
@@ -957,52 +973,123 @@ hierarquicalFeatureBasedPrediction <- function(model, testDir=""){
       #retrieves which nodes of the second level matched the test
       passed2 <- which(errors <= maxErrors)
       
+      #for each node from second level which matched the test, ...
       for(j in passed2){
         
-        #compute the errors for the first level
+        #gets the first level's representants
         firstLevel <- list2matrix(getAllFieldFromList(model[[i]][[j]]$children, "representant", 2))
-        icpResults <- apply(firstLevel, 1, function(reference, target){
-          
-          return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.33, minIter=2))
-          
-        }, test)
         
-        errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
-        maxErrors <- list2vector(getAllFieldFromList(model[[i]][[j]]$children, "maxError", 2))
-        #retrieves which nodes of the first level matched the test
-        passed1 <- which(errors <= maxErrors)
+        passed1 <- 1
         
-        for(k in passed1){
-          
-          nodes <- model[[i]][[j]]$children[[k]]$children
-          
-          #compute the errors for the leafs
-          firstLevel <- list2matrix(getAllFieldFromList(nodes, "representant", 2))
+        #if there is more than one representant at this level
+        if(!is.null(dim(firstLevel))){
+          #computes the errors for the first level
           icpResults <- apply(firstLevel, 1, function(reference, target){
             
-            return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.33, minIter=2))
+            return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.2, minIter=4))
             
           }, test)
           
           errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
-          maxErrors <- list2vector(getAllFieldFromList(nodes, "maxError", 2))
+          maxErrors <- list2vector(getAllFieldFromList(model[[i]][[j]]$children, "maxError", 2))
           #retrieves which nodes of the first level matched the test
-          passed <- which(errors <= maxErrors)
+          passed1 <- which(errors <= maxErrors)
+        }
+        else{
+          #computes the error with the single first level's representant
+          icpResults <- my.icp.2d.v2(firstLevel, curveCorrection3(test, firstLevel, 1), pSample=0.2, minIter=4)
+          maxError <- list2vector(getAllFieldFromList(model[[i]][[j]]$children, "maxError", 2))
+          #checks whether the representant matched
+          passed1 <- which(icpResults$error <= maxError)
+        }
+        
+        #for each node from first level which matched the test, ...
+        for(k in passed1){
           
-          for(v in passed){
+          #gets the nodes of the leaf level
+          nodes <- model[[i]][[j]]$children[[k]]$children
+          
+          #gets the leafs' representants
+          leafs <- list2matrix(getAllFieldFromList(nodes, "representant", 2))
+          
+          passed <- 1
+          
+          #if there is more than one representant at this level, ...
+          if(!is.null(dim(leafs))){
+            #computes the errors for the leafs
+            icpResults <- apply(leafs, 1, function(reference, target){
+              
+              return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.2, minIter=4))
+              
+            }, test)
             
-            votes[[i]][[vIndex]] <- list(id=names(nodes)[v], weight=errors[v])
-            vIndex <- vIndex + 1
+            errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
+            maxErrors <- list2vector(getAllFieldFromList(nodes, "maxError", 2))
+            #retrieves which nodes of the leafs matched the test
+            passed <- which(errors <= maxErrors)
+          }
+          else{
+            #computes the error with the single leafs' representant
+            icpResults <- my.icp.2d.v2(leafs, curveCorrection3(test, firstLevel, 1), pSample=0.2, minIter=4)
+            maxError <- list2vector(getAllFieldFromList(nodes, "maxError", 2))
+            #checks whether the representant matched
+            passed <- which(icpResults$error <= maxError)
+          }
+          
+          #cat(names(nodes), "\n")
+          
+          #for each leaf that matched the test, ...
+          for(v in passed){
+            #gets the leaf's samples
+            samples <- nodes[[v]]$samples
+            #computes the errors for each leaf sample
+            icpResults <- apply(samples, 1, function(reference, target){
+              
+              return (my.icp.2d.v2(curveCorrection3(reference, leafs[v,], 1), curveCorrection3(target, leafs[v,], 1), pSample=0.2, minIter=4))
+              
+            }, test)
+            #gets the minimum computed error
+            minError <- min(list2vector(getAllFieldFromList(icpResults, "error", 2)))
+            
+            #adds a vote for this leaf's class with the weight as the minimum error value
+            #cat("leaf:", v, " descriptor:", i, "test:", m, "first level:", k, "second level:", j, "\n")
+            votes[[i]] <- rbind(votes[[i]], matrix(c(as.numeric(names(nodes)[v]), minError), nrow=1))
           }
         }
       }
     }
+    
+    #counts the votes
+    votes <- Reduce(rbind, votes, matrix(c(0,0), nrow=1))[-c(1:2),]
+    
+    cat("test ", m, ". ")
+    
+    if(is.null(dim(votes)))
+      dim(votes) <- c(1,2)
+    
+    if(length(votes) > 1){
+      
+      result <- ponderateVote(votes, by="min")
+      #checks the result
+      if(paste("0", as.character(result[1]), sep="") == classes$fileClasses[m]){
+        
+        cat("Found!\n")
+        corrects <- corrects + 1
+      }
+      else
+        cat("Missed!\n")
+    }
+    else
+      cat("Unknown!\n")
   }
+  
+  cat("Accuracy:", corrects/M*100, "\n")
 }
 
-hieraquicalFeatureBasedClassifier <- function(trainingDir){
+hieraquicalFeatureBasedClassifier <- function(trainingDir, training=c()){
   
-  training <- dir(trainingDir)
+  if(length(training) == 0)
+    training <- dir(trainingDir)
   
   #retrieves the classes information
   classes <- getClassFromFiles(files=training)
@@ -1025,12 +1112,12 @@ hieraquicalFeatureBasedClassifier <- function(trainingDir){
     leafs <- computeNodes(samples, classes$fileClasses, progress=TRUE)
     
     #divides the leafs into groups
-    groups <- computeGrouping(leafs, "brute", 3, progress=TRUE)
+    groups <- computeGrouping(leafs, "brute", 7, progress=TRUE)
     #mounts the first level
     firstLevel <- computeNodes(list2matrix(getAllFieldFromList(leafs, "representant", 2)), groups, leafs, TRUE)
     
     #divides the first level into groups
-    groups <- computeGrouping(firstLevel, "brute")
+    groups <- computeGrouping(firstLevel, "brute", 3, progress=TRUE)
     #mounts the second level
     secondLevel <- computeNodes(list2matrix(getAllFieldFromList(firstLevel, "representant", 2)), groups, firstLevel, TRUE)
     
@@ -1056,28 +1143,47 @@ computeNodes <- function(samples, groups, children=0, progress=FALSE){
     
     node[["samples"]] <- thisClassSamples
     
-    meanClassSample <- colMeans(thisClassSamples)
-    
-    node[["representant"]] <- meanClassSample
-    
-    #compute the mean error and the mean error kind
-    icpResults <- apply(thisClassSamples, 1, function(target, reference){
+    if(is.null(dim(thisClassSamples))){
       
-      return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.33, minIter=2))
-      
-    }, meanClassSample)
-    
-    errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
-    #dists <- getAllFieldFromList(icpResults, "dist", 2)
-    #dists <- list2matrix(dists)
-    
-    node[["meanError"]] <- mean(errors)
-    node[["maxError"]] <- max(errors)
-    node[["maxError"]] <- node[["maxError"]] * 1.2
-    #node[["errorType"]] <- mean(dists)
-    
-    if(is.list(children))
+      node[["representant"]] <- thisClassSamples
+      node[["meanError"]] <- children[[thisClassSamplesIndex]]$meanError
+      node[["maxError"]] <- children[[thisClassSamplesIndex]]$maxError
+      node[["deviation"]] <- children[[thisClassSamplesIndex]]$deviation
       node[["children"]] <- children[thisClassSamplesIndex]
+    }
+    else{
+    
+      meanClassSample <- colMeans(thisClassSamples)
+      
+      node[["representant"]] <- meanClassSample
+      
+      #compute the mean error and the mean error kind
+      icpResults <- apply(thisClassSamples, 1, function(target, reference){
+        
+        return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.2, minIter=4))
+        
+      }, meanClassSample)
+      
+      errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
+      #dists <- getAllFieldFromList(icpResults, "dist", 2)
+      #dists <- list2matrix(dists)
+      
+      node[["meanError"]] <- mean(errors)
+      node[["deviation"]] <- sd(errors)
+      node[["maxError"]] <- max(errors)
+      node[["maxError"]] <- node[["maxError"]] * 1.2
+      #node[["errorType"]] <- mean(dists)
+      
+      if(is.list(children)){
+        node[["children"]] <- children[thisClassSamplesIndex]
+        
+        #computes the mean max error of the children
+        maxErrors <- list2vector(getAllFieldFromList(children, "maxError", 2))
+        maxErrors <- mean(maxErrors)
+        if(node[["maxError"]] < maxErrors)
+          node[["maxError"]] <- maxErrors
+      }
+    }
     
     levels[[g[j]]] <- node
     
@@ -1117,13 +1223,15 @@ computeGroupingByBrute <- function(nodes, nGroups=0, threshold=0, progress=FALSE
   #initiates the similarity matrix
   similarityMatrix <- matrix(rep(0, C*C), nrow=C)
   n <- computeNumberOfCombinations(C, 2)
+  if(progress)
+    cat(n, " combinations\n")
   m <- 1
   #computes the similarity matrix with the C representants
   for(j in 1:(C-1)){
     for(k in (j+1):C){
       
       similarityMatrix[j,k] <- my.icp.2d.v2(nodes[[j]][["representant"]],
-                                            nodes[[k]][["representant"]], minIter=5, pSample=0.33)$error
+                                            nodes[[k]][["representant"]], minIter=4, pSample=0.2)$error
       similarityMatrix[k,j] <- similarityMatrix[i,k]
       
       if(progress){

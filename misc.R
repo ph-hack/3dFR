@@ -387,7 +387,7 @@ differenceVector <- function(data){
 list2matrix <- function(l){
   
   m <- Reduce(function(y, x){
-    if(y[1] == 0){
+    if(!is.matrix(y)){
       return (matrix(x, nrow=1))
     }
     return(rbind(y, matrix(x, nrow=1)))

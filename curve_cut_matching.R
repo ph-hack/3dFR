@@ -96,7 +96,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     energy <- energy + primeError
     
     m <- length(target[,1])
-    nSamples <- round(m * pSample)
+    nSamples <- floor(m * pSample)
     dX <- round(1/pSample)
     
     samples <- 0
@@ -104,6 +104,8 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
       samples <- 0:(nSamples - 1) * dX + sample(1:dX, 1)
     else
       samples <- 0:(nSamples - 1) * dX + sample(1:(dX-1), 1)
+    
+    #cat("m: ", m, "dX:", dX, "samples:", samples, "\n")
     
     translationFactorX <- 0
     translationFactorY <- 0
