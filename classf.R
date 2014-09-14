@@ -947,6 +947,8 @@ hierarquicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
   #for each test sample, ...
   for(m in 1:M){
     
+    comparisons <- 0
+    
     #initializes the votes as an empty list
     votes <- list()
     
@@ -969,13 +971,15 @@ hierarquicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
       }, test)
       
       errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
-      maxErrors <- list2vector(getAllFieldFromList(model, "maxError", 3))
+      maxErrors <- list2vector(getAllFieldFromList(model[[1]], "maxError", 2))
       #retrieves which nodes of the second level matched the test
       passed2 <- which(errors <= maxErrors)
       
+      comparisons <- comparisons + dim(secondLevel)[1]
+      
       #for each node from second level which matched the test, ...
       for(j in passed2){
-        
+
         #gets the first level's representants
         firstLevel <- list2matrix(getAllFieldFromList(model[[i]][[j]]$children, "representant", 2))
         
@@ -1002,6 +1006,8 @@ hierarquicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
           #checks whether the representant matched
           passed1 <- which(icpResults$error <= maxError)
         }
+        
+        comparisons <- comparisons + dim(firstLevel)[1]
         
         #for each node from first level which matched the test, ...
         for(k in passed1){
@@ -1036,6 +1042,8 @@ hierarquicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
             passed <- which(icpResults$error <= maxError)
           }
           
+          comparisons <- comparisons + dim(leafs)[1]
+          
           #cat(names(nodes), "\n")
           
           #for each leaf that matched the test, ...
@@ -1057,10 +1065,16 @@ hierarquicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
           }
         }
       }
+      #removes the initialization value
+      votes[[i]] <- votes[[i]][-1,]
     }
     
     #counts the votes
-    votes <- Reduce(rbind, votes, matrix(c(0,0), nrow=1))[-c(1:2),]
+    votes <- Reduce(rbind, votes, matrix(c(0,0), nrow=1))[-1,]
+    
+    cat("votes:\n")
+    print(votes)
+    cat("comparisons:", comparisons, "\n")
     
     cat("test ", m, ". ")
     
@@ -1232,7 +1246,7 @@ computeGroupingByBrute <- function(nodes, nGroups=0, threshold=0, progress=FALSE
       
       similarityMatrix[j,k] <- my.icp.2d.v2(nodes[[j]][["representant"]],
                                             nodes[[k]][["representant"]], minIter=4, pSample=0.2)$error
-      similarityMatrix[k,j] <- similarityMatrix[i,k]
+      similarityMatrix[k,j] <- similarityMatrix[j,k]
       
       if(progress){
         cat("computing similarity:", m*100/n, "%\n")
