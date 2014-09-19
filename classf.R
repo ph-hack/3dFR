@@ -910,7 +910,7 @@ ponderateVote <- function(votes, by="min"){
   (c(uVotes[which.max(results)], max(results)))
 }
 
-hierarquicalFeatureBasedPrediction <- function(model, testDir="", subset=integer(0)){
+hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer(0), logFile=""){
   
   #gets the files' names
   testing <- dir(testDir)
@@ -944,8 +944,12 @@ hierarquicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
   
   corrects <- 0
   
+  cat("Testing", M, "samples!\n", file=logFile, append=FALSE)
+  
   #for each test sample, ...
   for(m in 1:M){
+    
+    cat("\npredicting test", m, ":\n", file=logFile, append=TRUE)
     
     comparisons <- 0
     
@@ -954,6 +958,8 @@ hierarquicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
     
     #for each descriptor, ...
     for(i in 1:N){
+      
+      cat("With predictor", i, "\n", file=logFile, append=TRUE)
       
       #initializes this descriptor's votes as a matrix with zeros (these zeros will be ignored later)
       votes[[i]] <- matrix(c(0,0), nrow=1)
@@ -979,6 +985,8 @@ hierarquicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
       
       #for each node from second level which matched the test, ...
       for(j in passed2){
+        
+        cat("2ndL(", j, "){", file=logFile, append=TRUE)
 
         #gets the first level's representants
         firstLevel <- list2matrix(getAllFieldFromList(model[[i]][[j]]$children, "representant", 2))
@@ -1011,6 +1019,8 @@ hierarquicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
         
         #for each node from first level which matched the test, ...
         for(k in passed1){
+          
+          cat(" 1stL(", k, "){", file=logFile, append=TRUE)
           
           #gets the nodes of the leaf level
           nodes <- model[[i]][[j]]$children[[k]]$children
@@ -1048,6 +1058,9 @@ hierarquicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
           
           #for each leaf that matched the test, ...
           for(v in passed){
+            
+            cat(" leaf(", names(nodes)[v], ")")
+            
             #gets the leaf's samples
             samples <- nodes[[v]]$samples
             #computes the errors for each leaf sample
@@ -1063,7 +1076,9 @@ hierarquicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
             #cat("leaf:", v, " descriptor:", i, "test:", m, "first level:", k, "second level:", j, "\n")
             votes[[i]] <- rbind(votes[[i]], matrix(c(as.numeric(names(nodes)[v]), minError), nrow=1))
           }
+          cat("}", file=logFile, append=TRUE)
         }
+        cat("}\n", file=logFile, append=TRUE)
       }
       #removes the initialization value
       votes[[i]] <- votes[[i]][-1,]
@@ -1072,11 +1087,10 @@ hierarquicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
     #counts the votes
     votes <- Reduce(rbind, votes, matrix(c(0,0), nrow=1))[-1,]
     
-    cat("votes:\n")
-    print(votes)
-    cat("comparisons:", comparisons, "\n")
-    
-    cat("test ", m, ". ")
+    cat("votes:\n", file=logFile, append=TRUE)
+    cat.matrix(votes, file=logFile, append=TRUE)
+    cat("comparisons:", comparisons, "\n", file=logFile, append=TRUE)
+    cat("test", m, ". ", file=logFile, append=TRUE)
     
     if(is.null(dim(votes)))
       dim(votes) <- c(1,2)
@@ -1087,20 +1101,26 @@ hierarquicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
       #checks the result
       if(paste("0", as.character(result[1]), sep="") == classes$fileClasses[m]){
         
-        cat("Found!\n")
+        cat("Found with", result[2], "\n", file=logFile, append=TRUE)
         corrects <- corrects + 1
       }
       else
-        cat("Missed!\n")
+        cat("Missed with", result[2], "\n", file=logFile, append=TRUE)
+      
+      cat("Result:", paste("0", as.character(result[1]), sep=""), file=logFile, append=TRUE)
     }
     else
-      cat("Unknown!\n")
+      cat("Unknown!\n", file=logFile, append=TRUE)
+    
+    cat(" Expected:", classes$fileClasses[m], "\n", file=logFile, append=TRUE)
+    
+    cat("\n", file=logFile, append=TRUE)
   }
   
-  cat("Accuracy:", corrects/M*100, "\n")
+  cat("--------Accuracy:", corrects/M*100, "----------\n", file=logFile, append=TRUE)
 }
 
-hieraquicalFeatureBasedClassifier <- function(trainingDir, training=c()){
+hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c()){
   
   if(length(training) == 0)
     training <- dir(trainingDir)
@@ -1435,4 +1455,36 @@ computeGroupingByKmeans <- function(nodes, nGroups, threshold){
   }
   
   return(groups)
+}
+
+print.hierarchicalModel <- function(model, file=""){
+  
+  N <- length(model)
+  
+  for(i in 1:N){
+    
+    cat("(", i, file=file, append=TRUE)
+    
+    print.hierarchicalModelAux(model[[i]], 1, file)
+    
+    cat("\n)\n", file=file, append=TRUE)
+  }
+}
+
+print.hierarchicalModelAux <- function(model, level, file){
+  
+  N <- length(model)
+  
+  for(i in 1:N){
+    
+    if(!is.null(names(model)[i]))
+      cat("\n", concatenate(rep("\t", level)), ">", names(model)[i], file=file, append=TRUE)
+    else
+      cat("\n", concatenate(rep("\t", level)), ">", i, file=file, append=TRUE)
+    
+    if(!is.null(model[[i]]$children))
+      print.hierarchicalModelAux(model[[i]]$children, level + 1, file)
+    
+    #cat("\n", concatenate(rep("\t", level)), ")", file=file, append=TRUE)
+  }
 }

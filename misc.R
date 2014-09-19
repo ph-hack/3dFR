@@ -433,3 +433,15 @@ computeNumberOfCombinations <- function(n, p){
   }
   return(x/factorial(p))
 }
+
+cat.matrix <- function(m, file="", append=FALSE){
+  
+  if(!is.null(dim(m)))
+  
+    res <- apply(m, 1, function(x){
+      
+      cat(x, "\n", file=file, append=append)
+    })
+  else
+    cat(paste(m, sep = " "), "\n", file=file, append=append)
+}
