@@ -8,7 +8,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   
   #checks whether there are at least 2 non-zero points in both curves
   if(!isOpt && (length(which(reference != 0)) < 2 || length(which(target != 0)) < 2))
-    return(list(target = target, error = m, energyTotal = m, energyMean = m))
+    return(list(target = target, error = m, energyTotal = m, energyMean = m, dist = matrix(c(1:m, rep(0, m)), ncol=2)))
   
   #converts them into 2D matrices
   reference <- matrix(c(1:m, reference), nrow=m)
@@ -23,14 +23,14 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   if(isOpt && (lr < 5 || lt < 5)){
     
     if(lr < 3 || lt < 3)
-      return(list(target = target, error = m, energyTotal = m, energyMean = m))
+      return(list(target = target, error = m, energyTotal = m, energyMean = m, dist = matrix(c(1:m, rep(0, m)), ncol=2)))
     
     if((reference[1,2] == 0 && reference[2,2] == 0) || (target[1,2] == 0 && target[2,2] == 0))
-      return(list(target = target, error = m, energyTotal = m, energyMean = m))
+      return(list(target = target, error = m, energyTotal = m, energyMean = m, dist = matrix(c(1:m, rep(0, m)), ncol=2)))
   }
   
   if(commonDomain(reference, target, isOpt) == 0)
-    return(list(target = target, error = m, energyTotal = m, energyMean = m))
+    return(list(target = target, error = m, energyTotal = m, energyMean = m, dist = matrix(c(1:m, rep(0, m)), ncol=2)))
   
   #remembers the prime target
   primeTarget <- target
@@ -64,13 +64,13 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     #measures the distances for each point
     distances <- dist.p2p(reference, target, isOpt)
     #computes the mean error
-    error <- mean(abs(distances))
+    error <- mean(abs(distances[,2]))
     
-    return(list(target = primeTarget, error = error, energyTotal = error, energyMean = error))
+    return(list(target = primeTarget, error = error, energyTotal = error, energyMean = error, dist = distances))
   }
   
   #computes the mean error
-  error <- mean(abs(distances))
+  error <- mean(abs(distances[,2]))
   
   #initializes the prime error that will always be equal or less than error
   primeError <- error
@@ -157,7 +157,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     #checks whether the curves got too far
     if(commonDomain(reference, target, isOpt) >= threshold)
       #if they didn't, measures the error
-      error <- mean(abs(distances))
+      error <- mean(abs(distances[,2]))
     else
       #otherwise, sets the erro to the prime error plus 1
       error <- primeError + 1
@@ -424,6 +424,7 @@ dist.p2p <- function(reference, target, isOpt=FALSE){
   
   distances <- rep(0, n)
   notPresent <- 0
+  xs <- 0
   
   if(isOpt){
     
@@ -438,21 +439,27 @@ dist.p2p <- function(reference, target, isOpt=FALSE){
     #distances <- mapply(difference, reference[ref,2], target[tar,2])
     #distances <- mapply(difference2, reference[ref,2], target[tar,2], reference[ref,1], target[tar,1], MoreArgs=list(reference, target))
     distances <- mapply(difference2, reference[ref,2], target[tar,2], ref, tar, MoreArgs=list(reference, target))
+    distances <- matrix(c(xmin:xmax, distances), ncol=2)
   }
-  else
+  else{
     for(i in 1:n){
       
       x <- target[i,1]
       
-      if(length(which(reference[,1] == x)) > 0)
+      if(length(which(reference[,1] == x)) > 0){
         distances[i] <- reference[which(reference[,1] == x), 2] - target[i,2]
+        xs <- c(xs, x)
+      }
       else
         notPresent <- c(notPresent, i)
     }
-  
-  notPresent <- notPresent[-1]
-  if(length(notPresent) > 0)
-    distances <- distances[-notPresent]
+    
+    notPresent <- notPresent[-1]
+    if(length(notPresent) > 0)
+      distances <- distances[-notPresent]
+    
+    distances <- matrix(c(xs, distances), ncol=2)
+  }
   
   (distances)
 }

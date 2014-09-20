@@ -910,7 +910,7 @@ ponderateVote <- function(votes, by="min"){
   (c(uVotes[which.max(results)], max(results)))
 }
 
-hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer(0), logFile=""){
+hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer(0), useErrorRange=TRUE, logFile=""){
   
   #gets the files' names
   testing <- dir(testDir)
@@ -977,9 +977,19 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
       }, test)
       
       errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
-      maxErrors <- list2vector(getAllFieldFromList(model[[1]], "maxError", 2))
+      maxErrors <- list2vector(getAllFieldFromList(model[[i]], "maxError", 2))
+      
+      rangeCheck <- rep(TRUE, length(errors))
+      
+      if(useErrorRange){
+        
+        dists <- getAllFieldFromList(icpResults, "dist", 2)
+        errorRange <- getAllFieldFromList(model[[i]], "errorRange", 2)
+        rangeCheck <- checkErrorRange(errorRange, dists)
+      }
+      
       #retrieves which nodes of the second level matched the test
-      passed2 <- which(errors <= maxErrors)
+      passed2 <- which(errors <= maxErrors && rangeCheck)
       
       comparisons <- comparisons + dim(secondLevel)[1]
       
@@ -1004,15 +1014,33 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
           
           errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
           maxErrors <- list2vector(getAllFieldFromList(model[[i]][[j]]$children, "maxError", 2))
+          
+          rangeCheck <- rep(TRUE, length(errors))
+          
+          if(useErrorRange){
+            
+            dists <- getAllFieldFromList(icpResults, "dist", 2)
+            errorRange <- getAllFieldFromList(model[[i]][[j]]$children, "errorRange", 2)
+            rangeCheck <- checkErrorRange(errorRange, dists)
+          }
           #retrieves which nodes of the first level matched the test
-          passed1 <- which(errors <= maxErrors)
+          passed1 <- which(errors <= maxErrors && rangeCheck)
         }
         else{
           #computes the error with the single first level's representant
           icpResults <- my.icp.2d.v2(firstLevel, curveCorrection3(test, firstLevel, 1), pSample=0.2, minIter=4)
           maxError <- list2vector(getAllFieldFromList(model[[i]][[j]]$children, "maxError", 2))
+          
+          rangeCheck <- TRUE
+          
+          if(useErrorRange){
+          
+            errorRange <- getAllFieldFromList(model[[i]][[j]]$children, "errorRange", 2)
+            rangeCheck <- checkErrorRange(errorRange, list(icpResults$dist))
+          }
+          
           #checks whether the representant matched
-          passed1 <- which(icpResults$error <= maxError)
+          passed1 <- which(icpResults$error <= maxError && rangeCheck)
         }
         
         comparisons <- comparisons + dim(firstLevel)[1]
@@ -1041,15 +1069,34 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
             
             errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
             maxErrors <- list2vector(getAllFieldFromList(nodes, "maxError", 2))
-            #retrieves which nodes of the leafs matched the test
-            passed <- which(errors <= maxErrors)
+            
+            rangeCheck = rep(TRUE, length(errors))
+            
+            if(useErrorRange){
+              
+              dists <- getAllFieldFromList(icpResults, "dist", 2)
+              errorRange <- getAllFieldFromList(nodes, "errorRange", 2)
+              rangeCheck <- checkErrorRange(errorRange, dists)
+            }
+            
+            #retrieves which nodes of the leafs level matched the test
+            passed <- which(errors <= maxErrors && rangeCheck)
           }
           else{
             #computes the error with the single leafs' representant
             icpResults <- my.icp.2d.v2(leafs, curveCorrection3(test, firstLevel, 1), pSample=0.2, minIter=4)
             maxError <- list2vector(getAllFieldFromList(nodes, "maxError", 2))
+            
+            rangeCheck <- TRUE
+            
+            if(useErrorRange){
+              
+              errorRange <- getAllFieldFromList(nodes, "errorRange", 2)
+              rangeCheck <- checkErrorRange(errorRange, list(icpResults$dist))
+            }
+            
             #checks whether the representant matched
-            passed <- which(icpResults$error <= maxError)
+            passed <- which(icpResults$error <= maxError && rangeCheck)
           }
           
           comparisons <- comparisons + dim(leafs)[1]
@@ -1183,6 +1230,7 @@ computeNodes <- function(samples, groups, children=0, progress=FALSE){
       node[["meanError"]] <- children[[thisClassSamplesIndex]]$meanError
       node[["maxError"]] <- children[[thisClassSamplesIndex]]$maxError
       node[["deviation"]] <- children[[thisClassSamplesIndex]]$deviation
+      node[["errorRange"]] <- children[[thisClassSamplesIndex]]$errorRange
       node[["children"]] <- children[thisClassSamplesIndex]
     }
     else{
@@ -1199,14 +1247,13 @@ computeNodes <- function(samples, groups, children=0, progress=FALSE){
       }, meanClassSample)
       
       errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
-      #dists <- getAllFieldFromList(icpResults, "dist", 2)
-      #dists <- list2matrix(dists)
+      dists <- getAllFieldFromList(icpResults, "dist", 2)
       
       node[["meanError"]] <- mean(errors)
       node[["deviation"]] <- sd(errors)
       node[["maxError"]] <- max(errors)
       node[["maxError"]] <- node[["maxError"]] * 1.2
-      #node[["errorType"]] <- mean(dists)
+      node[["errorRange"]] <- computeErrorRanges(dists)
       
       if(is.list(children)){
         node[["children"]] <- children[thisClassSamplesIndex]
@@ -1216,6 +1263,18 @@ computeNodes <- function(samples, groups, children=0, progress=FALSE){
         maxErrors <- mean(maxErrors)
         if(node[["maxError"]] < maxErrors)
           node[["maxError"]] <- maxErrors
+        
+        errorRange <- getAllFieldFromList(children, "errorRange", 2)
+        dists <- list()
+        dists[[1]] <- matrix(c(node[["errorRange"]][,1], node[["errorRange"]][,2]), ncol=2)
+        dists[[2]] <- matrix(c(node[["errorRange"]][,1], node[["errorRange"]][,3]), ncol=2)
+        
+        for(i in 1:(length(errorRange))){
+          dists[[length(dists) + 1]] <- matrix(c(errorRange[[i]][,1], errorRange[[i]][,2]), ncol=2)
+          dists[[length(dists) + 1]] <- matrix(c(errorRange[[i]][,1], errorRange[[i]][,3]), ncol=2)
+        }
+        
+        node[["errorRange"]] <- computeErrorRanges(dists)
       }
     }
     
@@ -1487,4 +1546,65 @@ print.hierarchicalModelAux <- function(model, level, file){
     
     #cat("\n", concatenate(rep("\t", level)), ")", file=file, append=TRUE)
   }
+}
+
+computeErrorRanges <- function(dists, add=1){
+  
+  N <- length(dists)
+  
+  errorRanges <- matrix(c(0,0,0), ncol=3)
+  
+  errorRanges <- Reduce(function(errorRanges, d){
+    
+    n <- length(d[,1])
+    
+    for(i in 1:n){
+      
+      x <- Position(function(z){
+        return(z == d[i,1])
+      }, errorRanges[,1])
+      
+      if(!is.na(x)){
+        
+        if(d[i,2] > errorRanges[x,3])
+          errorRanges[x,3] <- d[i,2]
+        
+        if(d[i,2] < errorRanges[x,2])
+          errorRanges[x,2] <- d[i,2]
+      }
+      else{
+        
+        errorRanges <- rbind(errorRanges, matrix(c(d[i,1], d[i,2], d[i,2]), ncol=3))
+      }
+    }
+    
+    return(errorRanges)
+    
+  }, dists, errorRanges)
+  
+  errorRanges <- errorRanges[-1,]
+  
+  errorRanges[,2] <- errorRanges[,2] - add
+  errorRanges[,3] <- errorRanges[,3] + add
+  
+  return(errorRanges)
+}
+
+checkErrorRange <- function(ranges, r){
+  
+  return(mapply(function(reference, target){
+    
+    n <- length(target[,1])
+    
+    for(i in 1:n){
+      
+      x <- target[i,1]
+      refX <- Position(function(z){ return(z == x)}, reference[,1], nomatch = 0)
+      
+      if(refX != 0 && (target[i,2] > reference[refX,3] || target[i,2] < reference[refX,2]))
+        return(FALSE)
+    }
+    return(TRUE)
+    
+  }, ranges, r))
 }
