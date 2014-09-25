@@ -951,6 +951,8 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
     
     cat("\npredicting test", m, ":\n", file=logFile, append=TRUE)
     
+    start <- getTime()
+    
     comparisons <- 0
     
     #initializes the votes as an empty list
@@ -1160,6 +1162,7 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
       cat("Unknown!\n", file=logFile, append=TRUE)
     
     cat(" Expected:", classes$fileClasses[m], "\n", file=logFile, append=TRUE)
+    cat("time: ", crono.end(start), "\n", file=logFile, append=TRUE)
     
     cat("\n", file=logFile, append=TRUE)
   }
