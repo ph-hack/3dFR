@@ -875,7 +875,7 @@ kNeigbourSelector <- function(trainingDir, testDir, training=0, test=0, toFile="
   (closest) #returns the 'amount' closest images
 }
 
-ponderateVote <- function(votes, by="min"){
+ponderateVote <- function(votes, by="min", type="number"){
   
   #gets the number of votes
   n <- length(votes[,1])
@@ -899,15 +899,21 @@ ponderateVote <- function(votes, by="min"){
       if(votes[v[j], 2] == 0)
         votes[v[j],2] <- 0.0000001
       
-      if(by == "min")
+      if(by == "min" && type == "number")
         results[i] <- results[i] + maxV - votes[v[j],2]
-      else if(by == "max")
+      else if(by == "max" || type == "value")
         results[i] <- results[i] + votes[v[j],2]
     }
     #results[i] <- results[i]/k
+    
+    if(type == "value")
+      results[i] <- results[i] - (k^1.8)/results[i]
   }
   
-  (c(uVotes[which.max(results)], max(results)))
+  if(type == "number" || by == "max")
+    return(c(uVotes[which.max(results)], max(results)))
+  else if(type == "value" && by == "min")
+    return(c(uVotes[which.min(results)], min(results)))
 }
 
 hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer(0), useErrorRange=TRUE, logFile=""){
@@ -991,7 +997,7 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
       }
       
       #retrieves which nodes of the second level matched the test
-      passed2 <- which(errors <= maxErrors && rangeCheck)
+      passed2 <- which(errors <= maxErrors & rangeCheck)
       
       comparisons <- comparisons + dim(secondLevel)[1]
       
@@ -1026,7 +1032,7 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
             rangeCheck <- checkErrorRange(errorRange, dists)
           }
           #retrieves which nodes of the first level matched the test
-          passed1 <- which(errors <= maxErrors && rangeCheck)
+          passed1 <- which(errors <= maxErrors & rangeCheck)
         }
         else{
           #computes the error with the single first level's representant
@@ -1042,7 +1048,7 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
           }
           
           #checks whether the representant matched
-          passed1 <- which(icpResults$error <= maxError && rangeCheck)
+          passed1 <- which(icpResults$error <= maxError & rangeCheck)
         }
         
         comparisons <- comparisons + dim(firstLevel)[1]
@@ -1082,7 +1088,7 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
             }
             
             #retrieves which nodes of the leafs level matched the test
-            passed <- which(errors <= maxErrors && rangeCheck)
+            passed <- which(errors <= maxErrors & rangeCheck)
           }
           else{
             #computes the error with the single leafs' representant
@@ -1098,7 +1104,7 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
             }
             
             #checks whether the representant matched
-            passed <- which(icpResults$error <= maxError && rangeCheck)
+            passed <- which(icpResults$error <= maxError & rangeCheck)
           }
           
           comparisons <- comparisons + dim(leafs)[1]
@@ -1146,7 +1152,7 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
     
     if(length(votes) > 1){
       
-      result <- ponderateVote(votes, by="min")
+      result <- ponderateVote(votes, by="min", type="value")
       #checks the result
       if(paste("0", as.character(result[1]), sep="") == classes$fileClasses[m]){
         
@@ -1256,7 +1262,7 @@ computeNodes <- function(samples, groups, children=0, progress=FALSE){
       node[["deviation"]] <- sd(errors)
       node[["maxError"]] <- max(errors)
       node[["maxError"]] <- node[["maxError"]] * 1.2
-      node[["errorRange"]] <- computeErrorRanges(dists)
+      node[["errorRange"]] <- computeErrorRanges(dists, 3)
       
       if(is.list(children)){
         node[["children"]] <- children[thisClassSamplesIndex]
