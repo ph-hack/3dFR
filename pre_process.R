@@ -3142,7 +3142,7 @@ curveCorrection3 <- function(curve, meanCurve, smooth=0, progress=FALSE){
   
   #cat("Executed\n")
   if(smooth > 0)
-    curve <- gaussianSmooth(curve, c(smooth))
+    curve <- gaussianSmooth(c(rep(curve[1], 2*smooth), curve, rep(curve[n], 2*smooth)), c(smooth))[(1 + 2*smooth):(n + 2*smooth)]
   
   (curve)
 }

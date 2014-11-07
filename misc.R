@@ -445,3 +445,10 @@ cat.matrix <- function(m, file="", append=FALSE){
   else
     cat(paste(m, sep = " "), "\n", file=file, append=append)
 }
+
+my.as.matrix <- function(vector){
+  
+  n <- length(vector)
+  
+  return(matrix(c(1:n, vector), ncol=2))
+}

@@ -885,6 +885,11 @@ ponderateVote <- function(votes, by="min", type="number"){
   #gets the number of unique candidates
   m <- length(uVotes)
   
+  #gets the number of votes for each class
+  nVotes <- tabulate(match(votes[,1], uVotes))
+  #gets the bigger number of votes for all classes
+  maxK <- max(nVotes)
+  
   maxV <- max(votes[,2]) + 1
   
   results <- rep(0,m)
@@ -907,7 +912,8 @@ ponderateVote <- function(votes, by="min", type="number"){
     #results[i] <- results[i]/k
     
     if(type == "value")
-      results[i] <- results[i] - (k^1.8)/results[i]
+      results[i] <- results[i]/k - k / (2 * maxK) * (maxV-1)
+      #results[i] <- results[i]/k - (k^1.8)/results[i]
   }
   
   if(type == "number" || by == "max")
@@ -1114,7 +1120,7 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer
           #for each leaf that matched the test, ...
           for(v in passed){
             
-            cat(" leaf(", names(nodes)[v], ")")
+            cat(" leaf(", names(nodes)[v], ")", file=logFile, append=TRUE)
             
             #gets the leaf's samples
             samples <- nodes[[v]]$samples
@@ -1193,6 +1199,8 @@ hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c()){
   
   for(i in 1:N){
     
+    cat("Computing tree for the", i, "th descriptor-------\n")
+    
     #separates only the vectors for the ith descriptors
     samples <- getAllFieldFromList(descriptors, i, 2)
     #puts them into a matrix
@@ -1262,7 +1270,7 @@ computeNodes <- function(samples, groups, children=0, progress=FALSE){
       node[["deviation"]] <- sd(errors)
       node[["maxError"]] <- max(errors)
       node[["maxError"]] <- node[["maxError"]] * 1.2
-      node[["errorRange"]] <- computeErrorRanges(dists, 3)
+      node[["errorRange"]] <- computeErrorRanges(dists, 1.5)
       
       if(is.list(children)){
         node[["children"]] <- children[thisClassSamplesIndex]
@@ -1366,6 +1374,7 @@ computeGroupingByBrute <- function(nodes, nGroups=0, threshold=0, progress=FALSE
   
   for(j in 2:C){
     
+    #while the jth node has no group, ...
     while(groups[j] == 0){
       #gets the closest representant
       closest <- which.min(similarityMatrix[j,])
@@ -1409,7 +1418,7 @@ computeGroupingByBrute <- function(nodes, nGroups=0, threshold=0, progress=FALSE
         }
         else{
           
-          similarityMatrix[j, closest] <- C + 1
+          #similarityMatrix[j, closest] <- C + 1
           similarityMatrix[j,] <- similarityMatrix[j,] - 1
         }
       }

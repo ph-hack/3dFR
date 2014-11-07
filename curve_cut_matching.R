@@ -12,7 +12,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   
   #converts them into 2D matrices
   reference <- matrix(c(1:m, reference), nrow=m)
-  target <- matrix(c(1:m, target), nrow=m)
+  target <- matrix(c(1:(length(target)), target), nrow=length(target))
   
   #takes out the null parts of both curves
   reference <- takeNoneFaceOut(reference)
@@ -483,6 +483,28 @@ takeNoneFaceOut <- function(data){
   
   #removes all points but the found interval
   data <- data[interval[1]:interval[2],]
+  
+  m <- length(data[,1])
+  angularCoefficients <- mapply(angularCoeff, data[1:(m-1),1], data[1:(m-1),2], data[2:m,1], data[2:m,2])
+  angularCoefficients <- abs(angularCoefficients)
+  threshold <- 3 * mean(angularCoefficients)
+  
+  xout <- which(angularCoefficients > threshold)
+  init <- 1
+  while(length(xout) > 0 && xout[1] == init){
+    
+    data <- data[-1,]
+    xout <- xout[-1]
+    init <- init + 1
+  }
+   
+  init <- m-1
+  while(length(xout) > 0 && xout[length(xout)] == init){
+    
+    data <- data[-(length(data[,1])),]
+    xout <- xout[-(length(xout))]
+    init <- init - 1
+  }
   
   #returns the cropped data
   (data)
