@@ -1270,7 +1270,7 @@ computeNodes <- function(samples, groups, children=0, progress=FALSE){
       node[["deviation"]] <- sd(errors)
       node[["maxError"]] <- max(errors)
       node[["maxError"]] <- node[["maxError"]] * 1.2
-      node[["errorRange"]] <- computeErrorRanges(dists, 1.5)
+      node[["errorRange"]] <- computeErrorRanges(dists, 2)
       
       if(is.list(children)){
         node[["children"]] <- children[thisClassSamplesIndex]
