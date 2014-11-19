@@ -922,10 +922,11 @@ ponderateVote <- function(votes, by="min", type="number"){
     return(c(uVotes[which.min(results)], min(results)))
 }
 
-hierarchicalFeatureBasedPrediction <- function(model, testDir="", subset=integer(0), useErrorRange=TRUE, logFile=""){
+hierarchicalFeatureBasedPrediction <- function(model, testDir="", testing=character(0), subset=integer(0), useErrorRange=TRUE, logFile=""){
   
   #gets the files' names
-  testing <- dir(testDir)
+  if(length(testing) == 0)
+    testing <- dir(testDir)
   
   if(length(subset) > 0)
     testing <- testing[subset]
@@ -1210,12 +1211,12 @@ hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c()){
     leafs <- computeNodes(samples, classes$fileClasses, progress=TRUE)
     
     #divides the leafs into groups
-    groups <- computeGrouping(leafs, "brute", 7, progress=TRUE)
+    groups <- computeGrouping(leafs, "brute", 9, progress=TRUE)
     #mounts the first level
     firstLevel <- computeNodes(list2matrix(getAllFieldFromList(leafs, "representant", 2)), groups, leafs, TRUE)
     
     #divides the first level into groups
-    groups <- computeGrouping(firstLevel, "brute", 3, progress=TRUE)
+    groups <- computeGrouping(firstLevel, "brute", 5, progress=TRUE)
     #mounts the second level
     secondLevel <- computeNodes(list2matrix(getAllFieldFromList(firstLevel, "representant", 2)), groups, firstLevel, TRUE)
     

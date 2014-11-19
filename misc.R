@@ -1,4 +1,4 @@
-concatenate <- function(words){
+concatenate <- function(words, sep=""){
   
   phrase <- ""
   n <- length(words)
@@ -6,12 +6,12 @@ concatenate <- function(words){
   if(is.list(words)){
     
     for(i in 1:n)
-      phrase <- paste(phrase, words[[i]], sep="")
+      phrase <- paste(phrase, words[[i]], sep=sep)
   }
   else{
     
     for(i in 1:n)
-      phrase <- paste(phrase, words[i], sep="")
+      phrase <- paste(phrase, words[i], sep=sep)
   }
   
   (phrase)
@@ -451,4 +451,19 @@ my.as.matrix <- function(vector){
   n <- length(vector)
   
   return(matrix(c(1:n, vector), ncol=2))
+}
+
+strcount <- function(x, pattern, split){
+  
+  count <- 0;
+
+  for(text in x){
+    
+    count <- count + unlist(lapply(
+       strsplit(text, split),
+       function(z) na.omit(length(grep(pattern, z)))
+    ))
+  }
+
+  return(count)
 }
