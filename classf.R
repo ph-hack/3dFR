@@ -922,7 +922,70 @@ ponderateVote <- function(votes, by="min", type="number"){
     return(c(uVotes[which.min(results)], min(results)))
 }
 
-hierarchicalFeatureBasedPrediction <- function(model, testDir="", testing=character(0), subset=integer(0), useErrorRange=TRUE, logFile=""){
+hierarchicalFeatureBasedEvaluatiion <- function(votes){
+  
+  #gets the ID of the faces
+  faces <- names(votes)
+  #retrieves the class information
+  classes <- getClassFromFiles(files=faces)
+  #gets the number of classes
+  M <- length(classes$classes)
+  #gets the number of descriptors
+  N <- length(votes[[1]])
+  
+  result <- list()
+  
+  #for each class
+  for(cla in classes$classes){
+    #iniates the result for this class with zeros
+    result[[cla]] <- rep(0, N)
+    
+    #identifies the samples which belongs to this class
+    thisClassSamples <- which(classes$fileClasses == cla)
+    
+    #for each descriptor
+    for(i in 1:N){
+      #gets the votes for this class of this descriptor
+      itsVotes <- getAllFieldFromList(votes[thisClassSamples], i, 2)
+      #reduces all separated matrix into a single one
+      itsVotes <- Reduce(function(y, x){
+        #cat("execution -------------------\nx=\n"); print(x); cat("\ny=\n"); print(y);
+        
+        if(length(x) > 0){
+          
+          if(!is.matrix(y)){
+            
+            if(is.matrix(x)){
+              
+              return(x)
+            }
+            else{
+              
+              return(matrix(x, nrow=1))
+            }
+          }
+          else{
+            
+            if(is.matrix(x)){
+              
+              return(rbind(y, x))
+            }
+            else{
+              
+              return(rbind(y, matrix(x, nrow=1)))
+            }
+          }
+        }
+        else
+          return(y)
+      }, itsVotes, 0)
+      
+      #computes the relative (to the number of samples tested) number of votes
+    }
+  }
+}
+
+hierarchicalFeatureBasedPrediction <- function(model, testDir="", testing=character(0), subset=integer(0), useErrorRange=TRUE, logFile="", evaluate=FALSE){
   
   #gets the files' names
   if(length(testing) == 0)
@@ -957,6 +1020,8 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", testing=charac
   
   corrects <- 0
   
+  votesByDescriptor <- list()
+  
   cat("Testing", M, "samples!\n", file=logFile, append=FALSE)
   
   #for each test sample, ...
@@ -970,6 +1035,7 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", testing=charac
     
     #initializes the votes as an empty list
     votes <- list()
+    votesByDescriptor[[testing[m]]] <- list()
     
     #for each descriptor, ...
     for(i in 1:N){
@@ -1144,6 +1210,8 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", testing=charac
       }
       #removes the initialization value
       votes[[i]] <- votes[[i]][-1,]
+      
+      votesByDescriptor[[testing[m]]][[i]] <- votes[[i]]
     }
     
     #counts the votes
@@ -1181,6 +1249,9 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", testing=charac
   }
   
   cat("--------Accuracy:", corrects/M*100, "----------\n", file=logFile, append=TRUE)
+  
+  if(evaluate)
+    return(votesByDescriptor)
 }
 
 hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c()){
@@ -1198,7 +1269,7 @@ hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c()){
   
   model <- list()
   
-  for(i in 1:N){
+  for(i in 1:2){
     
     cat("Computing tree for the", i, "th descriptor-------\n")
     
