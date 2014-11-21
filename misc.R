@@ -467,3 +467,35 @@ strcount <- function(x, pattern, split){
 
   return(count)
 }
+
+addRow <- function(m, r){
+  
+  errorMsg <- list("The new row is neither a vector nor a matrix!\n",
+                   "The number of columns are incorrect!\n")
+  
+  if(is.vector(r)){
+    
+    if(dim(m)[2] == length(r)){
+      
+      m <- rbind(m, matrix(r, nrow=1))
+    }
+    else{
+      cat(errorMsg[[2]])
+    }
+  }
+  else if(is.matrix(r)){
+    
+    if(dim(m)[2] == dim(r)[2]){
+      
+      m <- rbind(m, r)
+    }
+    else{
+      cat(errorMsg[[2]])
+    }
+  }
+  else{
+    cat(errorMsg[[1]])
+  }
+  
+  return(m)
+}

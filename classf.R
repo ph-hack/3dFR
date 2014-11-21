@@ -933,6 +933,15 @@ hierarchicalFeatureBasedEvaluatiion <- function(votes){
   #gets the number of descriptors
   N <- length(votes[[1]])
   
+  maxVotesPerClass <- list()
+  samplesPerClass <- list()
+  
+  for(cla in classes$classes){
+    
+    samplesPerClass[[cla]] <- which(classes$fileClasses == cla)
+    maxVotesPerClass[[cla]] <- length(samplesPerClass[[cla]])
+  }
+  
   result <- list()
   
   #for each class
@@ -941,7 +950,7 @@ hierarchicalFeatureBasedEvaluatiion <- function(votes){
     result[[cla]] <- rep(0, N)
     
     #identifies the samples which belongs to this class
-    thisClassSamples <- which(classes$fileClasses == cla)
+    thisClassSamples <- samplesPerClass[[cla]]
     
     #for each descriptor
     for(i in 1:N){
@@ -979,10 +988,72 @@ hierarchicalFeatureBasedEvaluatiion <- function(votes){
         else
           return(y)
       }, itsVotes, 0)
+      itsMean <- mean(itsVotes[,2])
+      itsDev <- mean(itsVotes[,2])
+      
+      #gets the votes for this class of this descriptor
+      otherVotes <- getAllFieldFromList(votes[-thisClassSamples], i, 2)
+      #reduces all separated matrix into a single one
+      otherVotes <- Reduce(function(y, x){
+        #cat("execution -------------------\nx=\n"); print(x); cat("\ny=\n"); print(y);
+        
+        if(length(x) > 0){
+          
+          if(!is.matrix(y)){
+            
+            if(is.matrix(x)){
+              
+              return(x)
+            }
+            else{
+              
+              return(matrix(x, nrow=1))
+            }
+          }
+          else{
+            
+            if(is.matrix(x)){
+              
+              return(rbind(y, x))
+            }
+            else{
+              
+              return(rbind(y, matrix(x, nrow=1)))
+            }
+          }
+        }
+        else
+          return(y)
+      }, otherVotes, 0)
+      otherMean <- mean(otherVotes[,2])
+      otherDev <- mean(otherVotes[,2])
       
       #computes the relative (to the number of samples tested) number of votes
+      itsNVotes <- length(itsVotes[,1])/maxVotesPerClass[[cla]]
+      otherNVotes <- length(otherVotes[,1])/sum(list2vector(maxVotesPerClass[which(classes$classes != cla)]))
     }
   }
+}
+
+voteNumberWeight <- function(its, other){
+  
+  result <- 0;
+  
+  if(its != 0){
+    
+    if(its != other){
+      
+      if(other == 0)
+        result = 0.5 + its/2
+      else        
+        result = its/2 + its/2*(its - other)#/(its + other)
+    }
+    else{
+      result = (its + other)/4
+    }
+  }
+  
+  return(result)
 }
 
 hierarchicalFeatureBasedPrediction <- function(model, testDir="", testing=character(0), subset=integer(0), useErrorRange=TRUE, logFile="", evaluate=FALSE){
