@@ -988,51 +988,74 @@ hierarchicalFeatureBasedEvaluatiion <- function(votes){
         else
           return(y)
       }, itsVotes, 0)
-      itsMean <- mean(itsVotes[,2])
-      itsDev <- mean(itsVotes[,2])
       
-      #gets the votes for this class of this descriptor
-      otherVotes <- getAllFieldFromList(votes[-thisClassSamples], i, 2)
-      #reduces all separated matrix into a single one
-      otherVotes <- Reduce(function(y, x){
-        #cat("execution -------------------\nx=\n"); print(x); cat("\ny=\n"); print(y);
+      #otherVotes <- Reduce(function(y, x){
+      #  
+      #  if(x[1] != as.numeric(cla)){
+      #    
+      #    if(is.matrix(y))
+      #      y <- rbind(y, matrix(x, ncol=2))
+      #    else
+      #      y <- matrix(x, ncol=2)
+      #  }
+      #}, itsVotes, 0)
+      
+      
+      itsMean <- 5
+      itsDev <- 0.1
+      itsNVotes <- 0
+      
+      if(length(itsVotes) > 1){
         
-        if(length(x) > 0){
+        otherVotes <- itsVotes[which(itsVotes[,1] != as.numeric(cla)),]
+        dim(otherVotes) <- c(length(otherVotes)/2,2)
+        itsVotes <- itsVotes[which(itsVotes[,1] == as.numeric(cla)),]
+        dim(itsVotes) <- c(length(itsVotes)/2,2)
+        
+        if(length(itsVotes) > 1){
           
-          if(!is.matrix(y)){
-            
-            if(is.matrix(x)){
-              
-              return(x)
-            }
-            else{
-              
-              return(matrix(x, nrow=1))
-            }
-          }
-          else{
-            
-            if(is.matrix(x)){
-              
-              return(rbind(y, x))
-            }
-            else{
-              
-              return(rbind(y, matrix(x, nrow=1)))
-            }
-          }
+          itsMean <- mean(itsVotes[,2])
+          itsDev <- sd(itsVotes[,2])
+          if(is.na(itsDev))
+            itsDev <- 0
+          #computes the relative (to the number of samples tested) number of votes
+          itsNVotes <- length(itsVotes[,1])/maxVotesPerClass[[cla]]
         }
-        else
-          return(y)
-      }, otherVotes, 0)
-      otherMean <- mean(otherVotes[,2])
-      otherDev <- mean(otherVotes[,2])
+      }
       
-      #computes the relative (to the number of samples tested) number of votes
-      itsNVotes <- length(itsVotes[,1])/maxVotesPerClass[[cla]]
-      otherNVotes <- length(otherVotes[,1])/sum(list2vector(maxVotesPerClass[which(classes$classes != cla)]))
+      otherMean <- 5
+      otherDev <- 0.1
+      otherNVotes <- 0
+      
+      if(length(otherVotes) > 1){
+        
+        otherMean <- mean(otherVotes[,2])
+        otherDev <- sd(otherVotes[,2])
+        if(is.na(otherDev))
+          otherDev <- 0
+        #computes the relative (to the number of samples tested) number of votes
+        otherNVotes <- length(otherVotes[,1])/sum(list2vector(maxVotesPerClass[which(classes$classes != cla)]))
+      }
+      
+      voteNWeight <- voteNumberWeight(itsNVotes, otherNVotes)
+      
+      if(voteNWeight > 0){
+        
+        separability <- computeSeparability(list(mean=itsMean, sd=itsDev), list(mean=otherMean, sd=otherDev))
+        
+        if(itsMean <= otherMean)
+          result[[cla]][i] <- hierarchicalFamiliarityWeight(itsMean, separability, voteNWeight)
+        else
+          result[[cla]][i] <- hierarchicalFamiliarityWeight(itsMean, separability, voteNWeight, 2)
+      }
+      else
+        result[[cla]][i] <- 10;
+      
+      cat(cla, ", descriptor ", i, ":", result[[cla]][i], "\n", "mean =", itsMean, "; separability =", separability, "; voteNWeight =", voteNWeight, "\n")
     }
   }
+  
+  return(result)
 }
 
 voteNumberWeight <- function(its, other){
@@ -1054,6 +1077,237 @@ voteNumberWeight <- function(its, other){
   }
   
   return(result)
+}
+
+hierarchicalFamiliarityWeight <- function(classMean, separability, voteNWeight, type=1){
+  
+  if(separability > 1)
+    separability <- 1 + (separability-1)/(separability*3)
+  
+  if(type == 1)
+    return(2^(classMean/(3*separability + 0.5) - (separability^2))/(voteNWeight*0.5))
+  else
+    return(2^(classMean/(3*separability + 0.5) + (separability^2))/(voteNWeight*0.5))
+}
+
+hierarchicalFeatureBasedPrediction2 <- function(model, testDir="", testing=character(0), subset=integer(0), useErrorRange=TRUE, logFile="", evaluate=FALSE){
+  
+  #gets the files' names
+  if(length(testing) == 0)
+    testing <- dir(testDir)
+  
+  if(length(subset) > 0)
+    testing <- testing[subset]
+  
+  #retrieves the classes information
+  classes <- getClassFromFiles(files=testing)
+  
+  #gets the descriptors' values for all test samples
+  descriptors <- lapply(concatenate(list(testDir, testing)), readMainLines, "list")
+  
+  #the number of models, one for each descriptor
+  N <- length(model)
+  #the number of testing sample
+  M <- length(testing)
+  
+  tests <- list()
+  
+  #for each descriptor, ...
+  for(i in 1:N){
+    
+    #separates only the vectors for the ith descriptor
+    samples <- getAllFieldFromList(descriptors, i, 2)
+    #puts them into a matrix
+    samples <- list2matrix(samples)
+    #puts this matrix into tests list
+    tests[[i]] <- samples
+  }
+  
+  corrects <- 0
+  
+  votesByDescriptor <- list()
+  
+  cat("Testing", M, "samples!\n", file=logFile, append=FALSE)
+  
+  #for each test sample, ...
+  for(m in 1:M){
+    
+    cat("\npredicting test", m, ":", file=logFile, append=TRUE)
+    
+    start <- getTime()
+    
+    comparisons <- 0
+    
+    #initializes the votes as an empty list
+    votes <- list()
+    votesByDescriptor[[testing[m]]] <- list()
+    
+    #for each descriptor, ...
+    for(i in 1:N){
+      
+      cat("\nWith predictor", i, file=logFile, append=TRUE)
+      
+      #initializes this descriptor's votes as a matrix with zeros (these zeros will be ignored later)
+      votes[[i]] <- matrix(c(0,0), nrow=1)
+      
+      #gets the ith descriptor of the mth test sample
+      test <- tests[[i]][m,]
+      
+      #gets the upper level's representants
+      level <- list2matrix(getAllFieldFromList(model[[i]], "representant", 2))
+      
+      levelIndex <- list(c(0, 1))
+      
+      levelQueue <- list(model[[i]])
+      
+      #for each node from second level which matched the test, ...
+      while(length(levelQueue) > 0){
+          
+        branch <- levelQueue[[1]]
+        
+        if(levelIndex[[1]][1] != 0)
+          cat("\n", concatenate(rep("   ", levelIndex[[1]][1])), levelIndex[[1]][1], "level, node", levelIndex[[1]][2], file=logFile, append=TRUE)
+        
+        #gets the first level's representants
+        representants <- list2matrix(getAllFieldFromList(branch, "representant", 2))
+        
+        passed <- 1
+        
+        #if there is more than one representant at this level
+        if(!is.null(dim(representants))){
+          #computes the errors for the first level
+          icpResults <- apply(representants, 1, function(reference, target){
+            
+            return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.2, minIter=4))
+            
+          }, test)
+          
+          errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
+          maxErrors <- list2vector(getAllFieldFromList(branch, "maxError", 2))
+          
+          rangeCheck <- rep(TRUE, length(errors))
+          
+          if(useErrorRange){
+            
+            dists <- getAllFieldFromList(icpResults, "dist", 2)
+            errorRange <- getAllFieldFromList(branch, "errorRange", 2)
+            rangeCheck <- checkErrorRange(errorRange, dists)
+          }
+          #retrieves which nodes of the first level matched the test
+          passed <- which(errors <= maxErrors & rangeCheck)
+        }
+        else{
+          #computes the error with the single first level's representant
+          icpResults <- my.icp.2d.v2(representants, curveCorrection3(test, representants, 1), pSample=0.2, minIter=4)
+          maxError <- list2vector(getAllFieldFromList(branch, "maxError", 2))
+          
+          rangeCheck <- TRUE
+          
+          if(useErrorRange){
+            
+            errorRange <- getAllFieldFromList(branch, "errorRange", 2)
+            rangeCheck <- checkErrorRange(errorRange, list(icpResults$dist))
+          }
+          
+          #checks whether the representant matched
+          passed <- which(icpResults$error <= maxError & rangeCheck)
+        }
+        
+        comparisons <- comparisons + dim(representants)[1]
+        
+        #if this is a leaf, ...
+        if(is.null(branch[[1]]$children)){
+          
+          for(v in passed){
+            
+            cat("\n", concatenate(rep("   ", levelIndex[[1]][1])), " leaf(", names(branch)[v], ")", file=logFile, append=TRUE)
+            
+            #gets the leaf's samples
+            samples <- branch[[v]]$samples
+            #computes the errors for each leaf sample
+            icpResults <- apply(samples, 1, function(reference, target){
+              
+              return (my.icp.2d.v2(curveCorrection3(reference, representants[v,], 1), curveCorrection3(target, representants[v,], 1), pSample=0.2, minIter=4))
+              
+            }, test)
+            #gets the minimum computed error
+            minErrorIndex <- which.min(list2vector(getAllFieldFromList(icpResults, "error", 2)))
+            minError <- list2vector(getAllFieldFromList(icpResults, "error", 2))[minErrorIndex]
+            
+            cat(" -------", minErrorIndex, "------")
+            
+            #adds a vote for this leaf's class with the weight as the minimum error value
+            #cat("leaf:", v, " descriptor:", i, "test:", m, "first level:", k, "second level:", j, "\n")
+            votes[[i]] <- rbind(votes[[i]], matrix(c(as.numeric(names(branch)[v]), minError), nrow=1))
+          }
+        }
+        else{
+          
+          for(v in passed){
+            
+            #levelQueue[[length(levelQueue) + 1]] <- branch[[v]]$children
+            
+            if(length(levelQueue) >= 2){
+              levelQueue <- merge.list(list(levelQueue[[1]], branch[[v]]$children), levelQueue[2:length(levelQueue)])
+              levelIndex <- merge.list(list(levelIndex[[1]], c(levelIndex[[1]][1] + 1, v)), levelIndex[2:length(levelIndex)])
+            }
+            else{
+              levelQueue[[length(levelQueue) + 1]] <- branch[[v]]$children
+              levelIndex[[length(levelIndex) + 1]] <- c(levelIndex[[1]][1] + 1, v)
+            }
+            
+            #levelIndex[[length(levelIndex) + 1]] <- c(levelIndex[[1]][1] + 1, v)
+          }
+        }
+        
+        levelQueue <- levelQueue[-1]
+        levelIndex <- levelIndex[-1]
+      }
+      
+      #removes the initialization value
+      votes[[i]] <- votes[[i]][-1,]
+      
+      votesByDescriptor[[testing[m]]][[i]] <- votes[[i]]
+    }
+    
+    #counts the votes
+    votes <- Reduce(rbind, votes, matrix(c(0,0), nrow=1))[-1,]
+    
+    cat("\nvotes:\n", file=logFile, append=TRUE)
+    cat.matrix(votes, file=logFile, append=TRUE)
+    cat("comparisons:", comparisons, "\n", file=logFile, append=TRUE)
+    cat("test", m, ". ", file=logFile, append=TRUE)
+    
+    if(is.null(dim(votes)))
+      dim(votes) <- c(1,2)
+    
+    if(length(votes) > 1){
+      
+      result <- ponderateVote(votes, by="min", type="value")
+      #checks the result
+      if(paste("0", as.character(result[1]), sep="") == classes$fileClasses[m]){
+        
+        cat("Found with", result[2], "\n", file=logFile, append=TRUE)
+        corrects <- corrects + 1
+      }
+      else
+        cat("Missed with", result[2], "\n", file=logFile, append=TRUE)
+      
+      cat("Result:", paste("0", as.character(result[1]), sep=""), file=logFile, append=TRUE)
+    }
+    else
+      cat("Unknown!\n", file=logFile, append=TRUE)
+    
+    cat(" Expected:", classes$fileClasses[m], "\n", file=logFile, append=TRUE)
+    cat("time: ", crono.end(start), "\n", file=logFile, append=TRUE)
+    
+    cat("\n", file=logFile, append=TRUE)
+  }
+  
+  cat("--------Accuracy:", corrects/M*100, "----------\n", file=logFile, append=TRUE)
+  
+  if(evaluate)
+    return(votesByDescriptor)
 }
 
 hierarchicalFeatureBasedPrediction <- function(model, testDir="", testing=character(0), subset=integer(0), useErrorRange=TRUE, logFile="", evaluate=FALSE){
@@ -1325,7 +1579,7 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", testing=charac
     return(votesByDescriptor)
 }
 
-hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c()){
+hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupNumbers=c(7,3), hasOneRoot=FALSE){
   
   if(length(training) == 0)
     training <- dir(trainingDir)
@@ -1340,7 +1594,7 @@ hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c()){
   
   model <- list()
   
-  for(i in 1:2){
+  for(i in 1:11){
     
     cat("Computing tree for the", i, "th descriptor-------\n")
     
@@ -1350,19 +1604,34 @@ hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c()){
     samples <- list2matrix(samples)
   
     #creates the first C nodes, where C = number of classes
-    leafs <- computeNodes(samples, classes$fileClasses, progress=TRUE)
+    currentLevel <- computeNodes(samples, classes$fileClasses, progress=TRUE)
+    
+    nGroups <- length(groupNumbers)
+    
+    for(j in 1:nGroups){
+      
+      #divides the leafs into groups
+      groups <- computeGrouping(currentLevel, "brute", groupNumbers[j], progress=TRUE)
+      #mounts the first level
+      currentLevel <- computeNodes(list2matrix(getAllFieldFromList(currentLevel, "representant", 2)), groups, currentLevel, TRUE)
+    }
     
     #divides the leafs into groups
-    groups <- computeGrouping(leafs, "brute", 9, progress=TRUE)
+    #groups <- computeGrouping(leafs, "brute", 7, progress=TRUE)
     #mounts the first level
-    firstLevel <- computeNodes(list2matrix(getAllFieldFromList(leafs, "representant", 2)), groups, leafs, TRUE)
+    #firstLevel <- computeNodes(list2matrix(getAllFieldFromList(leafs, "representant", 2)), groups, leafs, TRUE)
     
     #divides the first level into groups
-    groups <- computeGrouping(firstLevel, "brute", 5, progress=TRUE)
+    #groups <- computeGrouping(firstLevel, "brute", 3, progress=TRUE)
     #mounts the second level
-    secondLevel <- computeNodes(list2matrix(getAllFieldFromList(firstLevel, "representant", 2)), groups, firstLevel, TRUE)
+    #secondLevel <- computeNodes(list2matrix(getAllFieldFromList(firstLevel, "representant", 2)), groups, firstLevel, TRUE)
     
-    model[[i]] <- secondLevel
+    if(hasOneRoot){
+      root <- computeNodes(list2matrix(getAllFieldFromList(currentLevel, "representant", 2)), rep(1, groupNumbers[nGroups]), currentLevel, TRUE)
+      model[[i]] <- root
+    }
+    else
+      model[[i]] <- currentLevel
   }
   
   return(model)
@@ -1680,6 +1949,8 @@ computeGroupingByKmeans <- function(nodes, nGroups, threshold){
 print.hierarchicalModel <- function(model, file=""){
   
   N <- length(model)
+  
+  cat("", file=file, append=FALSE)
   
   for(i in 1:N){
     

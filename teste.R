@@ -1,4 +1,24 @@
 
+testHierarchicalFamiliarityWeight <- function(smaller, bigger, type=1){
+  
+  N <- length(smaller[,1])
+  
+  for(i in 1:N){
+    
+    s <- hierarchicalFamiliarityWeight(smaller[i,1], smaller[i, 2], smaller[i, 3], type)
+    b <- hierarchicalFamiliarityWeight(bigger[i,1], bigger[i, 2], bigger[i, 3], type)
+    
+    if(s >= b){
+      
+      cat("\nError!\n")
+      cat("smaller: ", smaller[i,], "->", s, "\n")
+      cat("bigger: ", bigger[i,], "->", b, "\n")
+    }
+  }
+  cat("\nDone!")
+}
+
+
 # Performs outlier correction on a curve
 # input:
 #   curve = a vector of numbers

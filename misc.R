@@ -499,3 +499,19 @@ addRow <- function(m, r){
   
   return(m)
 }
+
+merge.list <- function(x, y){
+  
+  n <- length(x)
+  m <- length(y)
+  
+  if(m > 0){
+  
+    for(i in 1:length(y)){
+      
+      x[[i + n]] <- y[[i]]
+    }
+  }
+  
+  return(x)
+}
