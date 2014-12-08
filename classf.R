@@ -922,7 +922,7 @@ ponderateVote <- function(votes, by="min", type="number"){
     return(c(uVotes[which.min(results)], min(results)))
 }
 
-hierarchicalFeatureBasedEvaluatiion <- function(votes){
+hierarchicalFeatureBasedEvaluation <- function(votes){
   
   #gets the ID of the faces
   faces <- names(votes)
@@ -932,7 +932,6 @@ hierarchicalFeatureBasedEvaluatiion <- function(votes){
   M <- length(classes$classes)
   #gets the number of descriptors
   N <- length(votes[[1]])
-  
   maxVotesPerClass <- list()
   samplesPerClass <- list()
   
@@ -1004,7 +1003,10 @@ hierarchicalFeatureBasedEvaluatiion <- function(votes){
       itsMean <- 5
       itsDev <- 0.1
       itsNVotes <- 0
-      
+     
+      otherVotes <- numeric()
+      dim(otherVotes) <- c(0,2)
+ 
       if(length(itsVotes) > 1){
         
         otherVotes <- itsVotes[which(itsVotes[,1] != as.numeric(cla)),]
@@ -1026,31 +1028,32 @@ hierarchicalFeatureBasedEvaluatiion <- function(votes){
       otherMean <- 5
       otherDev <- 0.1
       otherNVotes <- 0
-      
+      separability <- 0
+
       if(length(otherVotes) > 1){
-        
         otherMean <- mean(otherVotes[,2])
         otherDev <- sd(otherVotes[,2])
         if(is.na(otherDev))
           otherDev <- 0
         #computes the relative (to the number of samples tested) number of votes
-        otherNVotes <- length(otherVotes[,1])/sum(list2vector(maxVotesPerClass[which(classes$classes != cla)]))
+        otherNVotes <- length(otherVotes[,1])/(length(unique(otherVotes[,1])) * maxVotesPerClass[[cla]])
       }
       
       voteNWeight <- voteNumberWeight(itsNVotes, otherNVotes)
       
       if(voteNWeight > 0){
-        
         separability <- computeSeparability(list(mean=itsMean, sd=itsDev), list(mean=otherMean, sd=otherDev))
         
-        if(itsMean <= otherMean)
+        if(itsMean <= otherMean){
           result[[cla]][i] <- hierarchicalFamiliarityWeight(itsMean, separability, voteNWeight)
-        else
+        }
+        else{
           result[[cla]][i] <- hierarchicalFamiliarityWeight(itsMean, separability, voteNWeight, 2)
+        }
       }
-      else
+      else{
         result[[cla]][i] <- 10;
-      
+      }
       cat(cla, ", descriptor ", i, ":", result[[cla]][i], "\n", "mean =", itsMean, "; separability =", separability, "; voteNWeight =", voteNWeight, "\n")
     }
   }
@@ -1090,7 +1093,7 @@ hierarchicalFamiliarityWeight <- function(classMean, separability, voteNWeight, 
     return(2^(classMean/(3*separability + 0.5) + (separability^2))/(voteNWeight*0.5))
 }
 
-hierarchicalFeatureBasedPrediction2 <- function(model, testDir="", testing=character(0), subset=integer(0), useErrorRange=TRUE, logFile="", evaluate=FALSE){
+hierarchicalFeatureBasedPrediction2 <- function(model, testDir="", testing=character(0), subset=integer(0), useErrorRange=TRUE, logFile="", evaluate=FALSE, weights=c()){
   
   #gets the files' names
   if(length(testing) == 0)
@@ -1234,7 +1237,11 @@ hierarchicalFeatureBasedPrediction2 <- function(model, testDir="", testing=chara
             minErrorIndex <- which.min(list2vector(getAllFieldFromList(icpResults, "error", 2)))
             minError <- list2vector(getAllFieldFromList(icpResults, "error", 2))[minErrorIndex]
             
-            cat(" -------", minErrorIndex, "------")
+            cat(" -------", minErrorIndex, "------", file=logFile, append=TRUE)
+
+            if(length(weights) > 0)
+              if(!is.null(weights[[names(branch)[v]]]))
+                 minError <- minError * weights[[names(branch)[v]]][i]
             
             #adds a vote for this leaf's class with the weight as the minimum error value
             #cat("leaf:", v, " descriptor:", i, "test:", m, "first level:", k, "second level:", j, "\n")
@@ -1978,6 +1985,70 @@ print.hierarchicalModelAux <- function(model, level, file){
     
     #cat("\n", concatenate(rep("\t", level)), ")", file=file, append=TRUE)
   }
+}
+
+#' Changes the criterias for a given hierarchical model.
+#' The criterias might be "maxError" or/and "errorRange".
+#' The modes might be "multiply" or "sum".
+setHierarchicalModelCriterias <- function(model, criterias, mode="multiply"){
+
+  N <- length(model)
+
+  if(mode == "multiply"){
+    
+    if(is.null(criterias$errorRange)){
+    
+      criterias$errorRange <- 1
+    }
+    if(is.null(criterias$maxError)){
+
+      criterias$maxError <- 1
+    }
+  }
+  else if(mode == "sum"){
+
+    if(is.null(criterias$errorRange))
+
+      criterias$errorRange <- 0
+
+    if(is.null(criterias$maxError))
+
+      criterias$maxError <- 0
+  }
+
+  for(i in 1:N){
+
+     model[[i]] <- setHierarchicalModelCriteriasAux(model[[i]], criterias, mode)
+  }
+ 
+  return(model)
+}
+
+setHierarchicalModelCriteriasAux <- function(model, criterias, mode){
+
+  N <- length(model)
+
+  for(i in 1:N){
+
+    if(mode == "multiply"){
+
+      model[[i]]$maxError <- model[[i]]$maxError * criterias$maxError
+      model[[i]]$errorRange[,2] <- model[[i]]$errorRange[,2] * criterias$errorRange
+      model[[i]]$errorRange[,3] <- model[[i]]$errorRange[,3] * criterias$errorRange
+    }
+    else if(mode == "sum"){
+
+      model[[i]]$maxError <- model[[i]]$maxError + criterias$maxError
+      model[[i]]$errorRange[,2] <- model[[i]]$errorRange[,2] - criterias$errorRange
+      model[[i]]$errorRange[,3] <- model[[i]]$errorRange[,3] + criterias$errorRange
+    }
+
+    if(!is.null(model[[i]]$children))
+
+      model[[i]]$children <- setHierarchicalModelCriteriasAux(model[[i]]$children, criterias, mode)
+  }
+
+  return(model)
 }
 
 computeErrorRanges <- function(dists, add=1){
