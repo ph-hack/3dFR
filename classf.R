@@ -1085,7 +1085,7 @@ voteNumberWeight <- function(its, other){
   return(result)
 }
 
-hierarchicalFamiliarityWeight <- function(classMean, separability, voteNWeight, type=1){
+hierarchicalFamiliarityWeight <- function(classMean, separability, voteNWeight=2, type=1){
   
   if(separability > 1)
     separability <- 1 + (separability-1)/(separability*3)
@@ -1247,6 +1247,8 @@ hierarchicalFeatureBasedPrediction2 <- function(model, testDir="", testing=chara
                  minError <- minError * weights[[names(branch)[v]]][i]
               else
                  minError <- minError * 20
+            else
+              minError <- minError * branch[[v]]$weight
             
             #adds a vote for this leaf's class with the weight as the minimum error value
             #cat("leaf:", v, " descriptor:", i, "test:", m, "first level:", k, "second level:", j, "\n")
@@ -1287,6 +1289,7 @@ hierarchicalFeatureBasedPrediction2 <- function(model, testDir="", testing=chara
     
     cat("\nvotes:\n", file=logFile, append=TRUE)
     cat.matrix(votes, file=logFile, append=TRUE)
+    cat("number of votes:", length(votes[,1]), "\n", file=logFile, append=TRUE)
     cat("comparisons:", comparisons, "\n", file=logFile, append=TRUE)
     cat("test", m, ". ", file=logFile, append=TRUE)
     
@@ -1591,7 +1594,7 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", testing=charac
     return(votesByDescriptor)
 }
 
-hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupNumbers=c(7,3), hasOneRoot=FALSE){
+hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupNumbers=c(7,3), features=c(1:11), hasOneRoot=FALSE){
   
   if(length(training) == 0)
     training <- dir(trainingDir)
@@ -1606,7 +1609,7 @@ hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupN
   
   model <- list()
   
-  for(i in 1:11){
+  for(i in features){
     
     cat("Computing tree for the", i, "th descriptor-------\n")
     
@@ -1623,9 +1626,10 @@ hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupN
     for(j in 1:nGroups){
       
       #divides the leafs into groups
-      groups <- computeGrouping(currentLevel, "brute", groupNumbers[j], progress=TRUE)
+      gResult <- computeGrouping(currentLevel, "brute", groupNumbers[j], progress=TRUE)
+      currentLevel <- gResult$level
       #mounts the first level
-      currentLevel <- computeNodes(list2matrix(getAllFieldFromList(currentLevel, "representant", 2)), groups, currentLevel, TRUE)
+      currentLevel <- computeNodes(list2matrix(getAllFieldFromList(currentLevel, "representant", 2)), gResult$groups, currentLevel, TRUE)
     }
     
     #divides the leafs into groups
@@ -1664,6 +1668,7 @@ computeNodes <- function(samples, groups, children=0, progress=FALSE){
     thisClassSamples <- samples[thisClassSamplesIndex,]
     
     node[["samples"]] <- thisClassSamples
+    node[["weight"]] <- 1
     
     if(is.null(dim(thisClassSamples))){
       
@@ -1774,6 +1779,9 @@ computeGroupingByBrute <- function(nodes, nGroups=0, threshold=0, progress=FALSE
       }
     }
   }
+  
+  #nodes <- computeFamiliarityWeight(nodes, similarityMatrix)
+  
   #print(similarityMatrix)
   #computes the rank of similarity for the whole matrix
   similarityMatrix <- t(apply(similarityMatrix, 1, rank, ties.method = "random"))
@@ -1787,6 +1795,7 @@ computeGroupingByBrute <- function(nodes, nGroups=0, threshold=0, progress=FALSE
     }
   }
   print(similarityMatrix)
+  
   groups <- rep(0, C)
   
   #puts the first representant into the first group
@@ -1852,7 +1861,7 @@ computeGroupingByBrute <- function(nodes, nGroups=0, threshold=0, progress=FALSE
       cat("choosing groups:", j*100/C, "%\n")
   }
   
-  return(groups)
+  return(list(groups=groups, level=nodes))
 }
 
 #' Not finished!
@@ -1956,6 +1965,35 @@ computeGroupingByKmeans <- function(nodes, nGroups, threshold){
   }
   
   return(groups)
+}
+
+computeFamiliarityWeight <- function(level, similarityMatrix){
+  
+  N <- length(level)
+  
+  for(i in 1:N){
+    
+    innerMean <- level[[i]]$meanError
+    innerSd <- level[[i]]$deviation
+    
+    if(is.na(innerSd))
+      innerSd <- 0.0001
+    
+    outterMean <- mean(similarityMatrix[i,-i])
+    outterSd <- sd(similarityMatrix[i,-i])
+    
+    if(is.na(outterSd))
+      outterSd <- 0.0001
+    
+    separability <- computeSeparability(list(mean=innerMean, sd=innerSd), list(mean=outterMean, sd=outterSd))
+    
+    if(innerMean <= outterMean)
+      level[[i]]$weight <- hierarchicalFamiliarityWeight(innerMean, separability)
+    else
+      level[[i]]$weight <- hierarchicalFamiliarityWeight(innerMean, separability, type=2)
+  }
+  
+  return(level)
 }
 
 print.hierarchicalModel <- function(model, file=""){
