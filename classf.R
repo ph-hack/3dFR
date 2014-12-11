@@ -922,7 +922,7 @@ ponderateVote <- function(votes, by="min", type="number"){
     return(c(uVotes[which.min(results)], min(results)))
 }
 
-hierarchicalFeatureBasedEvaluation <- function(votes){
+hierarchicalFeatureBasedEvaluation <- function(votes, logFile=""){
   
   #gets the ID of the faces
   faces <- names(votes)
@@ -1023,6 +1023,9 @@ hierarchicalFeatureBasedEvaluation <- function(votes){
           #computes the relative (to the number of samples tested) number of votes
           itsNVotes <- length(itsVotes[,1])/maxVotesPerClass[[cla]]
         }
+        else{
+          cat("No corrects! ", cla, "---------\n", file=logFile, append=TRUE)
+        }
       }
       
       otherMean <- 5
@@ -1054,7 +1057,7 @@ hierarchicalFeatureBasedEvaluation <- function(votes){
       else{
         result[[cla]][i] <- 10;
       }
-      cat(cla, ", descriptor ", i, ":", result[[cla]][i], "\n", "mean =", itsMean, "; separability =", separability, "; voteNWeight =", voteNWeight, "\n")
+      cat(cla, ", descriptor ", i, ":", result[[cla]][i], "\n", "mean =", itsMean, "; separability =", separability, "; voteNWeight =", voteNWeight, "\n", file=logFile, append=TRUE)
     }
   }
   
@@ -1242,6 +1245,8 @@ hierarchicalFeatureBasedPrediction2 <- function(model, testDir="", testing=chara
             if(length(weights) > 0)
               if(!is.null(weights[[names(branch)[v]]]))
                  minError <- minError * weights[[names(branch)[v]]][i]
+              else
+                 minError <- minError * 20
             
             #adds a vote for this leaf's class with the weight as the minimum error value
             #cat("leaf:", v, " descriptor:", i, "test:", m, "first level:", k, "second level:", j, "\n")
