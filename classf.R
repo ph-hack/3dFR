@@ -1091,9 +1091,29 @@ hierarchicalFamiliarityWeight <- function(classMean, separability, voteNWeight=2
     separability <- 1 + (separability-1)/(separability*3)
   
   if(type == 1)
-    return(2^(classMean/(3*separability + 0.5) - (separability^2))/(voteNWeight*0.5))
+    return(2^(classMean/(14*separability + 0.5) - (separability^2))/(voteNWeight*0.5))
   else
-    return(2^(classMean/(3*separability + 0.5) + (separability^2))/(voteNWeight*0.5))
+    return(2^(classMean/(14*separability + 0.5) + (separability^2))/(voteNWeight*0.5))
+}
+
+applyWeight <- function(error, weight, maxError, meanWeight=1){
+
+  result <- 0
+
+  if(error <= maxError && weight <= meanWeight){
+
+    result <- error * weight/meanWeight
+  }
+  else if(error > maxError && weight <= meanWeight){
+
+    result <- error * meanWeight/weight
+  }
+  else{
+
+    result <- error * weight/meanWeight
+  }
+
+  return(result)
 }
 
 hierarchicalFeatureBasedPrediction2 <- function(model, testDir="", testing=character(0), subset=integer(0), useErrorRange=TRUE, logFile="", evaluate=FALSE, weights=c()){
@@ -1244,11 +1264,11 @@ hierarchicalFeatureBasedPrediction2 <- function(model, testDir="", testing=chara
 
             if(length(weights) > 0)
               if(!is.null(weights[[names(branch)[v]]]))
-                 minError <- minError * weights[[names(branch)[v]]][i]
+                 minError <- applyWeight(minError, weights[[names(branch)[v]]][i], branch[[v]]$maxError)
               else
                  minError <- minError * 20
             else
-              minError <- minError * branch[[v]]$weight
+              minError <- applyWeight(minError, branch[[v]]$weight, branch[[v]]$maxError)
             
             #adds a vote for this leaf's class with the weight as the minimum error value
             #cat("leaf:", v, " descriptor:", i, "test:", m, "first level:", k, "second level:", j, "\n")
@@ -1780,7 +1800,7 @@ computeGroupingByBrute <- function(nodes, nGroups=0, threshold=0, progress=FALSE
     }
   }
   
-  #nodes <- computeFamiliarityWeight(nodes, similarityMatrix)
+  nodes <- computeFamiliarityWeight(nodes, similarityMatrix)
   
   #print(similarityMatrix)
   #computes the rank of similarity for the whole matrix
