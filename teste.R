@@ -1,3 +1,259 @@
+hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=character(0), subset=integer(0), useErrorRange=TRUE, logFile="", evaluate=FALSE, weights=c()){
+  
+  #gets the files' names
+  if(length(testing) == 0)
+    testing <- dir(testDir)
+  
+  if(length(subset) > 0)
+    testing <- testing[subset]
+  
+  #retrieves the classes information
+  classes <- getClassFromFiles(files=testing)
+  
+  #gets the descriptors' values for all test samples
+  descriptors <- lapply(concatenate(list(testDir, testing)), readMainLines, "list")
+  
+  #the number of models, one for each descriptor
+  N <- length(model)
+  #the number of testing sample
+  M <- length(testing)
+  
+  tests <- list()
+  
+  #for each descriptor, ...
+  for(i in 1:N){
+    
+    #separates only the vectors for the ith descriptor
+    samples <- getAllFieldFromList(descriptors, i, 2)
+    #puts them into a matrix
+    samples <- list2matrix(samples)
+    #puts this matrix into tests list
+    tests[[i]] <- samples
+  }
+  
+  corrects <- 0
+  
+  votesByDescriptor <- list()
+  
+  cat("Testing", M, "samples!\n", file=logFile, append=FALSE)
+  
+  #for each test sample, ...
+  for(m in 1:M){
+    
+    cat("\npredicting test", m, ":", file=logFile, append=TRUE)
+    
+    start <- getTime()
+    
+    comparisons <- 0
+    
+    #initializes the votes as an empty list
+    votes <- list()
+    votesByDescriptor[[testing[m]]] <- list()
+    
+    #for each descriptor, ...
+    for(i in 1:N){
+      
+      cat("\nWith predictor", i, file=logFile, append=TRUE)
+      
+      #initializes this descriptor's votes as a matrix with zeros (these zeros will be ignored later)
+      votes[[i]] <- matrix(c(0,0), nrow=1)
+      voteWeights <- c()
+      maxWeightErrors <- c()
+      
+      #gets the ith descriptor of the mth test sample
+      test <- tests[[i]][m,]
+      
+      #gets the upper level's representants
+      level <- list2matrix(getAllFieldFromList(model[[i]], "representant", 2))
+      
+      levelIndex <- list(c(0, 1))
+      
+      levelQueue <- list(model[[i]])
+      
+      #for each node from second level which matched the test, ...
+      while(length(levelQueue) > 0){
+        
+        branch <- levelQueue[[1]]
+        
+        if(levelIndex[[1]][1] != 0)
+          cat("\n", concatenate(rep("   ", levelIndex[[1]][1])), levelIndex[[1]][1], "level, node", levelIndex[[1]][2], file=logFile, append=TRUE)
+        
+        #gets the first level's representants
+        representants <- list2matrix(getAllFieldFromList(branch, "representant", 2))
+        
+        passed <- 1
+        
+        #if there is more than one representant at this level
+        if(!is.null(dim(representants))){
+          #computes the errors for the first level
+          icpResults <- apply(representants, 1, function(reference, target){
+            
+            return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.2, minIter=4))
+            
+          }, test)
+          
+          errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
+          maxErrors <- list2vector(getAllFieldFromList(branch, "maxError", 2))
+          ws <- list2vector(getAllFieldFromList(branch, "weight", 2))
+          
+          rangeCheck <- rep(TRUE, length(errors))
+          
+          if(useErrorRange){
+            
+            dists <- getAllFieldFromList(icpResults, "dist", 2)
+            errorRange <- getAllFieldFromList(branch, "errorRange", 2)
+            rangeCheck <- checkErrorRange(errorRange, dists)
+          }
+          #retrieves which nodes of the first level matched the test
+          #passed <- which(errors <= maxErrors & rangeCheck)
+          passed <- which(ws <= rep(1, length(ws)) & rangeCheck)
+        }
+        else{
+          #computes the error with the single first level's representant
+          icpResults <- my.icp.2d.v2(representants, curveCorrection3(test, representants, 1), pSample=0.2, minIter=4)
+          maxError <- list2vector(getAllFieldFromList(branch, "maxError", 2))
+          ws <- list2vector(getAllFieldFromList(branch, "weight", 2))
+          
+          rangeCheck <- TRUE
+          
+          if(useErrorRange){
+            
+            errorRange <- getAllFieldFromList(branch, "errorRange", 2)
+            rangeCheck <- checkErrorRange(errorRange, list(icpResults$dist))
+          }
+          
+          #checks whether the representant matched
+          #passed <- which(icpResults$error <= maxError & rangeCheck)
+          passed <- which(ws <= 1 & rangeCheck)
+        }
+        
+        comparisons <- comparisons + dim(representants)[1]
+        
+        #if this is a leaf, ...
+        if(is.null(branch[[1]]$children)){
+          
+          for(v in passed){
+            
+            cat("\n", concatenate(rep("   ", levelIndex[[1]][1])), " leaf(", names(branch)[v], ")", file=logFile, append=TRUE)
+            
+            #gets the leaf's samples
+            samples <- branch[[v]]$samples
+            #computes the errors for each leaf sample
+            icpResults <- apply(samples, 1, function(reference, target){
+              
+              return (my.icp.2d.v2(curveCorrection3(reference, representants[v,], 1), curveCorrection3(target, representants[v,], 1), pSample=0.2, minIter=4))
+              
+            }, test)
+            #gets the minimum computed error
+            minErrorIndex <- which.min(list2vector(getAllFieldFromList(icpResults, "error", 2)))
+            #minError <- list2vector(getAllFieldFromList(icpResults, "error", 2))[minErrorIndex]
+            minError <- mean(list2vector(getAllFieldFromList(icpResults, "error", 2)))
+            
+            cat(" -------", minErrorIndex, "------", file=logFile, append=TRUE)
+            cat(" E =", minError, file=logFile, append=TRUE)
+            
+            maxWeightErrors <- c(maxWeightErrors, branch[[v]]$deviation + branch[[v]]$meanError)
+            
+            if(length(weights) > 0)
+              if(!is.null(weights[[names(branch)[v]]]))
+                minError <- applyWeight(minError, weights[[names(branch)[v]]][i], branch[[v]]$deviation + branch[[v]]$meanError)
+            else
+              minError <- minError * 20
+            #else
+            #  minError <- applyWeight(minError, branch[[v]]$weight, branch[[v]]$deviation + branch[[v]]$meanError)
+            
+            #cat(" Ew =", minError, file=logFile, append=TRUE)
+            
+            #adds a vote for this leaf's class with the weight as the minimum error value
+            #cat("leaf:", v, " descriptor:", i, "test:", m, "first level:", k, "second level:", j, "\n")
+            votes[[i]] <- rbind(votes[[i]], matrix(c(as.numeric(names(branch)[v]), minError), nrow=1))
+            voteWeights <- c(voteWeights, branch[[v]]$weight)
+          }
+        }
+        else{
+          
+          for(v in passed){
+            
+            #levelQueue[[length(levelQueue) + 1]] <- branch[[v]]$children
+            
+            if(length(levelQueue) >= 2){
+              levelQueue <- merge.list(list(levelQueue[[1]], branch[[v]]$children), levelQueue[2:length(levelQueue)])
+              levelIndex <- merge.list(list(levelIndex[[1]], c(levelIndex[[1]][1] + 1, v)), levelIndex[2:length(levelIndex)])
+            }
+            else{
+              levelQueue[[length(levelQueue) + 1]] <- branch[[v]]$children
+              levelIndex[[length(levelIndex) + 1]] <- c(levelIndex[[1]][1] + 1, v)
+            }
+            
+            #levelIndex[[length(levelIndex) + 1]] <- c(levelIndex[[1]][1] + 1, v)
+          }
+        }
+        
+        levelQueue <- levelQueue[-1]
+        levelIndex <- levelIndex[-1]
+      }
+      
+      #removes the initialization value
+      votes[[i]] <- votes[[i]][-1,]
+      
+      #dim(votes[[i]]) <- c(length(votes[[i]])/2, 2)
+      
+      #applies the weights to the votes
+      #if(length(votes[[i]][,1]) > 1){
+      
+      #  votes[[i]][,2] <- mapply(applyWeight, votes[[i]][,2], voteWeights, MoreArgs = list(maxError = mean(votes[[i]][,2])))
+      #}
+      #else{
+      
+      #  votes[[i]][,2] <- mapply(applyWeight, votes[[i]][,2], voteWeights, maxWeightErrors)
+      #}
+      
+      
+      votesByDescriptor[[testing[m]]][[i]] <- votes[[i]]
+    }
+    
+    #counts the votes
+    votes <- Reduce(rbind, votes, matrix(c(0,0), nrow=1))[-1,]
+    
+    dim(votes) <- c(length(votes)/2, 2)
+    
+    cat("\nvotes:\n", file=logFile, append=TRUE)
+    cat.matrix(votes, file=logFile, append=TRUE)
+    cat("number of votes:", length(votes[,1]), "\n", file=logFile, append=TRUE)
+    cat("comparisons:", comparisons, "\n", file=logFile, append=TRUE)
+    cat("test", m, ". ", file=logFile, append=TRUE)
+    
+    if(is.null(dim(votes)))
+      dim(votes) <- c(1,2)
+    
+    if(length(votes) > 1){
+      
+      result <- ponderateVote(votes, by="min", type="value")
+      #checks the result
+      if(paste("0", as.character(result[1]), sep="") == classes$fileClasses[m]){
+        
+        cat("Found with", result[2], "\n", file=logFile, append=TRUE)
+        corrects <- corrects + 1
+      }
+      else
+        cat("Missed with", result[2], "\n", file=logFile, append=TRUE)
+      
+      cat("Result:", paste("0", as.character(result[1]), sep=""), file=logFile, append=TRUE)
+    }
+    else
+      cat("Unknown!\n", file=logFile, append=TRUE)
+    
+    cat(" Expected:", classes$fileClasses[m], "\n", file=logFile, append=TRUE)
+    cat("time: ", crono.end(start), "\n", file=logFile, append=TRUE)
+    
+    cat("\n", file=logFile, append=TRUE)
+  }
+  
+  cat("--------Accuracy:", corrects/M*100, "----------\n", file=logFile, append=TRUE)
+  
+  if(evaluate)
+    return(votesByDescriptor)
+}
 
 testHierarchicalFamiliarityWeight <- function(smaller, bigger, type=1){
   
