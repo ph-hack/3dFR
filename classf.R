@@ -1175,8 +1175,6 @@ hierarchicalFeatureBasedPrediction2 <- function(model, testDir="", testing=chara
       
       #initializes this descriptor's votes as a matrix with zeros (these zeros will be ignored later)
       votes[[i]] <- matrix(c(0,0), nrow=1)
-      voteWeights <- c()
-      maxWeightErrors <- c()
       
       #gets the ith descriptor of the mth test sample
       test <- tests[[i]][m,]
@@ -1264,9 +1262,6 @@ hierarchicalFeatureBasedPrediction2 <- function(model, testDir="", testing=chara
             #minError <- mean(list2vector(getAllFieldFromList(icpResults, "error", 2)))
             
             cat(" -------", minErrorIndex, "------", file=logFile, append=TRUE)
-            cat(" E =", minError, file=logFile, append=TRUE)
-            
-            maxWeightErrors <- c(maxWeightErrors, branch[[v]]$deviation + branch[[v]]$meanError)
 
             if(length(weights) > 0)
               if(!is.null(weights[[names(branch)[v]]]))
@@ -1281,7 +1276,6 @@ hierarchicalFeatureBasedPrediction2 <- function(model, testDir="", testing=chara
             #adds a vote for this leaf's class with the weight as the minimum error value
             #cat("leaf:", v, " descriptor:", i, "test:", m, "first level:", k, "second level:", j, "\n")
             votes[[i]] <- rbind(votes[[i]], matrix(c(as.numeric(names(branch)[v]), minError), nrow=1))
-            voteWeights <- c(voteWeights, branch[[v]]$weight)
           }
         }
         else{

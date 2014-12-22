@@ -166,8 +166,15 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
             
             #adds a vote for this leaf's class with the weight as the minimum error value
             #cat("leaf:", v, " descriptor:", i, "test:", m, "first level:", k, "second level:", j, "\n")
-            votes[[i]] <- rbind(votes[[i]], matrix(c(as.numeric(names(branch)[v]), minError), nrow=1))
-            voteWeights <- c(voteWeights, branch[[v]]$weight)
+            if(minError <= branch[[v]]$maxError){
+              
+              votes[[i]] <- rbind(votes[[i]], matrix(c(as.numeric(names(branch)[v]), minError), nrow=1))
+              voteWeights <- c(voteWeights, branch[[v]]$weight)
+            }
+            else{
+              
+              cat(" Failed due to max error", file=logFile, append=TRUE)
+            }
           }
         }
         else{
