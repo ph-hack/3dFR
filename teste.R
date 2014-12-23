@@ -1,3 +1,39 @@
+
+
+applyDCT <- function(listData, meanCurves=list()){
+  
+  N <- length(listData)
+  
+  colors <- c('black', 'red', 'blue', 'green', 'cyan', 'orange', 'brown', 'gray', 'yellow')
+  
+  if(N > 9)
+    N <- 9
+  
+  plot(matrix(c(0,20,-1000,500), ncol=2), col="white")
+  
+  DCT <- list()
+  
+  for(i in 1:N){
+    
+    M <- dim(listData[[i]])[1]
+    
+    dcts <- apply(listData[[i]], 1, function(x){
+      
+      #return(dtt(curveCorrection3(x, meanCurves[[i]], 1), "dct"))
+      return(dtt(x, "dct"))
+    })
+    
+    for(j in 1:M){
+      
+      lines(dcts[2:20, j], col=colors[i])
+    }
+    
+    DCT[[i]] <- dcts
+  }
+  
+  return(DCT)
+}
+
 hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=character(0), subset=integer(0), useErrorRange=TRUE, logFile="", evaluate=FALSE, weights=c()){
   
   #gets the files' names
@@ -89,11 +125,13 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
           icpResults <- apply(representants, 1, function(reference, target){
             
             return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.2, minIter=4))
+            #return (dtw(reference, curveCorrection3(target, reference, 1)))
             
           }, test)
           
           errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
-          maxErrors <- list2vector(getAllFieldFromList(branch, "maxError", 2))
+          #errors <- list2vector(getAllFieldFromList(icpResults, "normalizedDistance", 2))
+          #maxErrors <- list2vector(getAllFieldFromList(branch, "maxError", 2))
           ws <- list2vector(getAllFieldFromList(branch, "weight", 2))
           
           rangeCheck <- rep(TRUE, length(errors))
@@ -111,7 +149,8 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
         else{
           #computes the error with the single first level's representant
           icpResults <- my.icp.2d.v2(representants, curveCorrection3(test, representants, 1), pSample=0.2, minIter=4)
-          maxError <- list2vector(getAllFieldFromList(branch, "maxError", 2))
+          #icpResults <- dtw(representants, curveCorrection3(test, representants, 1))
+          #maxError <- list2vector(getAllFieldFromList(branch, "maxError", 2))
           ws <- list2vector(getAllFieldFromList(branch, "weight", 2))
           
           rangeCheck <- TRUE
@@ -142,12 +181,15 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
             icpResults <- apply(samples, 1, function(reference, target){
               
               return (my.icp.2d.v2(curveCorrection3(reference, representants[v,], 1), curveCorrection3(target, representants[v,], 1), pSample=0.2, minIter=4))
+              #return (dtw(curveCorrection3(reference, representants[v,], 1), curveCorrection3(target, representants[v,], 1)))
               
             }, test)
             #gets the minimum computed error
             minErrorIndex <- which.min(list2vector(getAllFieldFromList(icpResults, "error", 2)))
+            #minErrorIndex <- which.min(list2vector(getAllFieldFromList(icpResults, "normalizedDistance", 2)))
             #minError <- list2vector(getAllFieldFromList(icpResults, "error", 2))[minErrorIndex]
             minError <- mean(list2vector(getAllFieldFromList(icpResults, "error", 2)))
+            #minError <- list2vector(getAllFieldFromList(icpResults, "normalizedDistance", 2))[minErrorIndex]
             
             cat(" -------", minErrorIndex, "------", file=logFile, append=TRUE)
             cat(" E =", minError, file=logFile, append=TRUE)
