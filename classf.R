@@ -1,6 +1,7 @@
 library(class)
 library(mmand)
 library(e1071)
+library(dtt)
 
 # Retrieves the face's person ID from the fileName, which can be the ABS, JPG or LDMK file(s).
 # input:
@@ -1088,12 +1089,15 @@ voteNumberWeight <- function(its, other){
 hierarchicalFamiliarityWeight <- function(classMean, separability, voteNWeight=2, type=1){
   
   if(separability > 1)
-    separability <- 1 + (separability-1)/(separability*3)
+    #separability <- 1 + (separability-1)/(separability*3)
+    separability <- 1
   
   if(type == 1)
-    return(2^(classMean/(14*separability + 0.5) - (separability^2))/(voteNWeight*0.5))
+    #return(2^(classMean/(14*separability + 0.5) - (separability^2))/(voteNWeight*0.5))
+    return (1 - separability)
   else
-    return(2^(classMean/(14*separability + 0.5) + (separability^2))/(voteNWeight*0.5))
+    #return(2^(classMean/(14*separability + 0.5) + (separability^2))/(voteNWeight*0.5))
+    return (1 + separability)
 }
 
 applyWeight <- function(error, weight, maxError, meanWeight=1){
@@ -1632,7 +1636,10 @@ hierarchicalFeatureBasedPrediction <- function(model, testDir="", testing=charac
     return(votesByDescriptor)
 }
 
-hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupNumbers=c(7,3), features=c(1:11), hasOneRoot=FALSE){
+hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupNumbers=c(7,3),
+                                               features=c(1:11), hasOneRoot=FALSE, errorFunctions=list(my.icp.2d.v2),
+                                               errorParams=list(list(minIter=4, pSample=0.2)),
+                                               criterias = list(list(maxError=1.2, errorRange=2))){
   
   if(length(training) == 0)
     training <- dir(trainingDir)
@@ -1642,56 +1649,66 @@ hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupN
   
   descriptors <- lapply(concatenate(list(trainingDir, training)), readMainLines, "list")
   
-  N <- length(descriptors[[1]])
+  N <- length(features) #descriptors[[1]])
   C <- length(classes$classes)
+  Nef <- length(errorFunctions)
   
   model <- list()
   
-  for(i in features){
-    
-    cat("Computing tree for the", i, "th descriptor-------\n")
-    
-    #separates only the vectors for the ith descriptors
-    samples <- getAllFieldFromList(descriptors, i, 2)
-    #puts them into a matrix
-    samples <- list2matrix(samples)
+  for(f in 1:Nef){
   
-    #creates the first C nodes, where C = number of classes
-    currentLevel <- computeNodes(samples, classes$fileClasses, progress=TRUE)
+    for(i in features){
+      
+      cat("Computing tree for the", i, "th descriptor-------\n")
+      
+      #separates only the vectors for the ith descriptors
+      samples <- getAllFieldFromList(descriptors, i, 2)
+      #puts them into a matrix
+      samples <- list2matrix(samples)
     
-    nGroups <- length(groupNumbers)
-    
-    for(j in 1:nGroups){
+      #creates the first C nodes, where C = number of classes
+      currentLevel <- computeNodes(samples, classes$fileClasses, errorFunction = errorFunctions[[f]],
+                                   errorParams = errorParams[[f]], criterias=criterias[[f]], progress=TRUE)
+      
+      nGroups <- length(groupNumbers)
+      
+      for(j in 1:nGroups){
+        
+        #divides the leafs into groups
+        gResult <- computeGrouping(currentLevel, "brute", groupNumbers[j], errorFunction = errorFunctions[[f]],
+                                   errorParams = errorParams[[f]], progress=TRUE)
+        currentLevel <- gResult$level
+        #mounts the first level
+        currentLevel <- computeNodes(list2matrix(getAllFieldFromList(currentLevel, "representant", 2)),
+                                     gResult$groups, currentLevel, errorFunctions[[f]], errorParams[[f]],
+                                     criterias[[f]],TRUE)
+      }
       
       #divides the leafs into groups
-      gResult <- computeGrouping(currentLevel, "brute", groupNumbers[j], progress=TRUE)
-      currentLevel <- gResult$level
+      #groups <- computeGrouping(leafs, "brute", 7, progress=TRUE)
       #mounts the first level
-      currentLevel <- computeNodes(list2matrix(getAllFieldFromList(currentLevel, "representant", 2)), gResult$groups, currentLevel, TRUE)
+      #firstLevel <- computeNodes(list2matrix(getAllFieldFromList(leafs, "representant", 2)), groups, leafs, TRUE)
+      
+      #divides the first level into groups
+      #groups <- computeGrouping(firstLevel, "brute", 3, progress=TRUE)
+      #mounts the second level
+      #secondLevel <- computeNodes(list2matrix(getAllFieldFromList(firstLevel, "representant", 2)), groups, firstLevel, TRUE)
+      
+      if(hasOneRoot){
+        root <- computeNodes(list2matrix(getAllFieldFromList(currentLevel, "representant", 2)), 
+                             rep(1, groupNumbers[nGroups]), currentLevel, errorFunctions[[f]], errorParams[[f]], TRUE)
+        model[[(f-1)*N + i]] <- root
+      }
+      else
+        model[[(f-1)*N + i]] <- currentLevel
     }
-    
-    #divides the leafs into groups
-    #groups <- computeGrouping(leafs, "brute", 7, progress=TRUE)
-    #mounts the first level
-    #firstLevel <- computeNodes(list2matrix(getAllFieldFromList(leafs, "representant", 2)), groups, leafs, TRUE)
-    
-    #divides the first level into groups
-    #groups <- computeGrouping(firstLevel, "brute", 3, progress=TRUE)
-    #mounts the second level
-    #secondLevel <- computeNodes(list2matrix(getAllFieldFromList(firstLevel, "representant", 2)), groups, firstLevel, TRUE)
-    
-    if(hasOneRoot){
-      root <- computeNodes(list2matrix(getAllFieldFromList(currentLevel, "representant", 2)), rep(1, groupNumbers[nGroups]), currentLevel, TRUE)
-      model[[i]] <- root
-    }
-    else
-      model[[i]] <- currentLevel
   }
   
   return(model)
 }
 
-computeNodes <- function(samples, groups, children=0, progress=FALSE){
+computeNodes <- function(samples, groups, children=0, errorFunction=my.icp.2d.v2,
+                         errorParams=list(minIter=4, pSample=0.2), criterias, progress=FALSE){
   
   g <- unique(groups)
   G <- length(g)
@@ -1706,7 +1723,7 @@ computeNodes <- function(samples, groups, children=0, progress=FALSE){
     thisClassSamples <- samples[thisClassSamplesIndex,]
     
     node[["samples"]] <- thisClassSamples
-    node[["weight"]] <- 1
+    node[["weight"]] <- 0
     
     if(is.null(dim(thisClassSamples))){
       
@@ -1726,7 +1743,7 @@ computeNodes <- function(samples, groups, children=0, progress=FALSE){
       #compute the mean error and the mean error kind
       icpResults <- apply(thisClassSamples, 1, function(target, reference){
         
-        return (my.icp.2d.v2(reference, curveCorrection3(target, reference, 1), pSample=0.2, minIter=4))
+        return (do.call(errorFunction, merge.list(list(reference, curveCorrection3(target, reference, 1)), errorParams)))
         
       }, meanClassSample)
       
@@ -1736,8 +1753,8 @@ computeNodes <- function(samples, groups, children=0, progress=FALSE){
       node[["meanError"]] <- mean(errors)
       node[["deviation"]] <- sd(errors)
       node[["maxError"]] <- max(errors)
-      node[["maxError"]] <- node[["maxError"]] * 1.2
-      node[["errorRange"]] <- computeErrorRanges(dists, 2)
+      node[["maxError"]] <- node[["maxError"]] * criterias$maxError
+      node[["errorRange"]] <- computeErrorRanges(dists, criterias$errorRange)
       
       if(is.list(children)){
         node[["children"]] <- children[thisClassSamplesIndex]
@@ -1771,7 +1788,8 @@ computeNodes <- function(samples, groups, children=0, progress=FALSE){
   return(levels)
 }
 
-computeGrouping <- function(nodes, mode, nGroups=0, threshold=0, progress=FALSE){
+computeGrouping <- function(nodes, mode="brute", nGroups=0, threshold=0, errorFunction=my.icp.2d.v2,
+                            errorParams=list(minIter=4, pSample=0.2), progress=FALSE){
   
   C <- length(nodes)
   
@@ -1785,7 +1803,7 @@ computeGrouping <- function(nodes, mode, nGroups=0, threshold=0, progress=FALSE)
   
   if(mode == "brute"){
     
-    return( computeGroupingByBrute(nodes, nGroups, threshold, progress))
+    return( computeGroupingByBrute(nodes, nGroups, threshold, errorFunction, errorParams, progress))
   }
   else if(mode == "Kmeans"){
     
@@ -1793,7 +1811,7 @@ computeGrouping <- function(nodes, mode, nGroups=0, threshold=0, progress=FALSE)
   }
 }
 
-computeGroupingByBrute <- function(nodes, nGroups=0, threshold=0, progress=FALSE){
+computeGroupingByBrute <- function(nodes, nGroups=0, threshold=0, errorFunction, errorParams, progress=FALSE){
   
   C <- length(nodes)
   
@@ -1807,8 +1825,8 @@ computeGroupingByBrute <- function(nodes, nGroups=0, threshold=0, progress=FALSE
   for(j in 1:(C-1)){
     for(k in (j+1):C){
       
-      similarityMatrix[j,k] <- my.icp.2d.v2(nodes[[j]][["representant"]],
-                                            nodes[[k]][["representant"]], minIter=4, pSample=0.2)$error
+      similarityMatrix[j,k] <- do.call(errorFunction, merge.list(list(nodes[[j]][["representant"]],
+                                            nodes[[k]][["representant"]]), errorParams))$error
       similarityMatrix[k,j] <- similarityMatrix[j,k]
       
       if(progress){
@@ -2015,13 +2033,13 @@ computeFamiliarityWeight <- function(level, similarityMatrix){
     innerSd <- level[[i]]$deviation
     
     if(is.na(innerSd))
-      innerSd <- 0.0001
+      innerSd <- 0.000001
     
     outterMean <- mean(similarityMatrix[i,-i])
     outterSd <- sd(similarityMatrix[i,-i])
     
     if(is.na(outterSd))
-      outterSd <- 0.0001
+      outterSd <- 0.000001
     
     separability <- computeSeparability(list(mean=innerMean, sd=innerSd), list(mean=outterMean, sd=outterSd))
     

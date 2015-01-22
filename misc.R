@@ -507,9 +507,14 @@ merge.list <- function(x, y){
   
   if(m > 0){
   
-    for(i in 1:length(y)){
+    for(i in 1:m){
       
-      x[[i + n]] <- y[[i]]
+      if(is.null(names(y[i])) || names(y[i]) == ""){
+        x[[i + n]] <- y[[i]]
+      }
+      else{
+        x[[names(y[i])]] <- y[[i]]
+      }
     }
   }
   
