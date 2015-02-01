@@ -100,10 +100,15 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     dX <- round(1/pSample)
     
     samples <- 0
+    #Problem when dx = 1 ------------------------------------------------------------------------------------
     if(m %% 2 == 0)
       samples <- 0:(nSamples - 1) * dX + sample(1:dX, 1)
-    else
-      samples <- 0:(nSamples - 1) * dX + sample(1:(dX-1), 1)
+    else{
+      if(dX > 1)
+        samples <- 0:(nSamples - 1) * dX + sample(1:(dX-1), 1)
+      else
+        samples <- 0:(nSamples - 1) * dX + 1
+    }
     
     #cat("m: ", m, "dX:", dX, "samples:", samples, "\n")
     
@@ -136,6 +141,8 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
         
         translationFactorX <- translationFactorX + reference[k,1] - target[j,1]
         translationFactorY <- translationFactorY + reference[k,2] - target[j,2]
+        
+        cat(translationFactorX, "; ", translationFactorY, "\n")
       }
     
     translationFactorX <- translationFactorX/nSamples

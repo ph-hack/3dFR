@@ -913,7 +913,8 @@ ponderateVote <- function(votes, by="min", type="number"){
     #results[i] <- results[i]/k
     
     if(type == "value")
-      results[i] <- results[i]/k - k / (2 * maxK) * (maxV-1)
+      #results[i] <- results[i]/k - k / (2 * maxK) * (maxV-1)
+      results[i] <- results[i]/k - k / (1.2*maxK) * (maxV-1)
       #results[i] <- results[i]/k - (k^1.8)/results[i]
   }
   
