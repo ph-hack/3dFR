@@ -894,11 +894,13 @@ ponderateVote <- function(votes, by="min", type="number"){
   maxV <- max(votes[,2]) + 1
   
   results <- rep(0,m)
+  Ks <- rep(0,m)
   
   for(i in 1:m){
     
     v <- which(votes[,1] == uVotes[i])
     k <- length(v)
+    Ks[i] <- k
     
     for(j in 1:k){
       
@@ -919,9 +921,9 @@ ponderateVote <- function(votes, by="min", type="number"){
   }
   
   if(type == "number" || by == "max")
-    return(c(uVotes[which.max(results)], max(results)))
+    return(c(uVotes[which.max(results)], max(results), Ks[which.max(results)]))
   else if(type == "value" && by == "min")
-    return(c(uVotes[which.min(results)], min(results)))
+    return(c(uVotes[which.min(results)], min(results), Ks[which.min(results)]))
 }
 
 hierarchicalFeatureBasedEvaluation <- function(votes, logFile=""){
