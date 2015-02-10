@@ -1,3 +1,83 @@
+detectPeaks <- function(curve, smooth=0, isToPlot=FALSE){
+  
+  n <- length(curve)
+  if(smooth > 0 && smooth < n/2)
+  curve <- gaussianSmooth(c(rep(curve[1], 2*smooth), curve, rep(curve[n], 2*smooth)), c(smooth))[(1 + 2*smooth):(n + 2*smooth)]
+  
+  g <- gradient(curve)
+  
+  P <- mapply(function(x){
+    
+    w <- getWindow(g, x, 1)
+    
+    if(length(w) == 1){
+        return (g[x] > g[w])
+    }
+    else{
+      return ((g[w[1]] < g[x] && g[x] > g[w[2]]) ||
+                (g[w[1]] > g[x] && g[x] < g[w[2]]))
+    }
+      
+  }, 1:n)
+  
+  P <- which(P)
+  
+  if(isToPlot){
+    
+    curve <- setRange(curve)
+    g <- setRange(g)
+    
+    plot(curve, type="l")
+    lines(g, col="blue")
+    
+    for(p in P)
+      lines(rep(p, 2), c(0,1), col="red")
+  }
+  
+  return(P)
+}
+
+gradient <- function(curve){
+  
+  N <- length(curve)
+  G <- mapply(function(x, y){
+    
+    w <- getWindow(curve, y, 1)
+    
+    return(sum(abs(x - curve[w]))/length(w))
+  }, curve, 1:N)
+  
+  return(G)
+}
+
+getWindow <- function(signal, idx, size){
+  
+  N <- length(signal)
+  
+  W <- c()
+  
+  if(idx > N || idx < 1)
+    return(W)
+  
+  if(idx - size > 0)
+    W <- c(W, (idx - size):(idx - 1))
+  
+  if(idx + size <= N)
+    W <- c(W, (idx + 1):(idx + size))
+  
+  return(W)
+}
+
+setRange <- function(x, range=c(0,1)){
+  
+  minX <- min(x)
+  maxX <- max(x)
+  
+  x <- ((x - minX)*(range[2]-range[1]))/(maxX - minX) + range[1]
+  
+  return(x)
+}
+
 my.cosineDistance <- function(reference, target, method = "dct", coeffRange=c()){
   
   N <- length(reference)

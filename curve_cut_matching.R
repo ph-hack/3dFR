@@ -100,14 +100,24 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     dX <- round(1/pSample)
     
     samples <- 0
-    #Problem when dx = 1 ------------------------------------------------------------------------------------
-    if(m %% 2 == 0)
-      samples <- 0:(nSamples - 1) * dX + sample(1:dX, 1)
+    refSamples <- 1:length(reference[,2])
+    
+    if(pSample > 0){
+      if(m %% 2 == 0)
+        samples <- 0:(nSamples - 1) * dX + sample(1:dX, 1)
+      else{
+        if(dX > 1)
+          samples <- 0:(nSamples - 1) * dX + sample(1:(dX-1), 1)
+        else
+          samples <- 0:(nSamples - 1) * dX + 1
+      }
+    }
     else{
-      if(dX > 1)
-        samples <- 0:(nSamples - 1) * dX + sample(1:(dX-1), 1)
-      else
-        samples <- 0:(nSamples - 1) * dX + 1
+      
+      samples <- detectPeaks(target[,2], 2)
+      refSamples <- detectPeaks(reference[,2], 2)
+      nSamples <- length(samples)
+      #cat(nSamples, "and", length(refSamples), "samples\n")
     }
     
     #cat("m: ", m, "dX:", dX, "samples:", samples, "\n")
@@ -117,7 +127,7 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     
     if(isOpt){
       
-      data <- list(target = target, reference = reference, translationFactorX = 0, translationFactorY = 0)
+      data <- list(target = target, reference = reference[refSamples,], translationFactorX = 0, translationFactorY = 0)
       
       data <- Reduce(function(data, sample){
         
