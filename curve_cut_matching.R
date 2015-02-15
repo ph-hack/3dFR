@@ -114,8 +114,14 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     }
     else{
       
-      samples <- detectPeaks(target[,2], 2)
-      refSamples <- detectPeaks(reference[,2], 2)
+      samples <- detectPeaks(target[,2], 1)
+      refSamples <- detectPeaks(reference[,2], 1)
+      
+      newSamples <- getCorrespondents(target[samples,], reference[refSamples,])
+      
+      samples <- samples[newSamples[[1]]]
+      refSamples <- refSamples[newSamples[[2]]]
+      
       nSamples <- length(samples)
       #cat(nSamples, "and", length(refSamples), "samples\n")
     }
@@ -185,6 +191,46 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   }
   #returns the informations
   (list(target = primeTarget, dist = primeDistances, error = primeError, energyTotal = energy, energyMean = (energy/(i - 1))))
+}
+
+getCorrespondents <- function(P1, P2){
+  
+  reference <- 1
+  target <- 1
+  
+  n1 <- length(P1[,1])
+  n2 <- length(P2[,1])
+  
+  if(n1 > n2){
+    
+    target <- P1
+    reference <- P2
+  }
+  else if(n1 < n2){
+    target <- P2
+    reference <- P1
+  }
+  else{
+    return(list(1:n1, 1:n2))
+  }
+  
+  x <- rep(0, length(reference[,1]))
+  
+  for(i in 1:(length(reference[,1]))){
+    
+    ds <- as.matrix(dist(rbind(reference[i,], target)))[1,-1]
+    x[i] <- which.min(ds)
+    target[x[i],2] <- 100000
+  }
+  
+  if(n1 > n2){
+    
+    return(list(x, 1:n2))
+  }
+  else if(n1 < n2){
+    
+    return(list(1:n1, x))
+  }
 }
 
 # Compares 2 lines (curves) by better matching them throught linear transformations

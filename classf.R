@@ -2092,9 +2092,10 @@ print.hierarchicalModelAux <- function(model, level, file){
 #' Changes the criterias for a given hierarchical model.
 #' The criterias might be "maxError" or/and "errorRange".
 #' The modes might be "multiply" or "sum".
-setHierarchicalModelCriterias <- function(model, criterias, mode="multiply"){
+setHierarchicalModelCriterias <- function(model, criterias, mode="multiply", descriptors=0){
 
-  N <- length(model)
+  if(descriptors[1] == 0)
+    descriptors <- 1:(length(model))
 
   if(mode == "multiply"){
     
@@ -2118,7 +2119,7 @@ setHierarchicalModelCriterias <- function(model, criterias, mode="multiply"){
       criterias$maxError <- 0
   }
 
-  for(i in 1:N){
+  for(i in descriptors){
 
      model[[i]] <- setHierarchicalModelCriteriasAux(model[[i]], criterias, mode)
   }

@@ -3102,20 +3102,51 @@ measureEnergy <- function(curve){
 #   curve = a vector of numbers
 curveCorrection3 <- function(curve, meanCurve, smooth=0, progress=FALSE){
   
-  n <- length(curve)
+  #n <- length(curve)
   
   #checks whether there are at least 2 non-zero points in both curves
   if(length(which(curve != 0)) < 2)
     return(curve)
   
+  target <- my.icp.2d.v2(meanCurve, curve, maxIter=2, pSample=0)$target
+  sorted <- sort.int(target[,1], index.return = TRUE)$ix
+  target <- target[sorted,]
+  
+  xmin = 1
+  xmax = length(target[,2])
+  if(target[xmin,1] < 1){
+    
+    xmax <- min(length(meanCurve), target[xmax,1])
+    meanCurve <- meanCurve[1:xmax]
+    
+    xmin = which(target[,1] > 0)[1]
+    xmax = which(target[,1] == xmax)
+    curve <- target[xmin:xmax,2]
+  }
+  else{
+    xmax <- min(length(meanCurve), target[xmax,1])
+    meanCurve <- meanCurve[target[xmin,1]:xmax]
+    
+    xmax = which(target[,1] == xmax)
+    curve <- target[1:xmax,2]
+  }
+  
+  n <- length(curve)
+  
   imgVarX <- getXvar(matrix(c(1:n, curve), ncol=2))
+  
+  g <- gradient(curve)
+  gm <- gradient(meanCurve)
   
   diff <- meanCurve[imgVarX$min:imgVarX$max] - curve[imgVarX$min:imgVarX$max]
   diff <- abs(diff - mean(diff))
+  gDiff <- gm[imgVarX$min:imgVarX$max] - g[imgVarX$min:imgVarX$max]
+  gDiff <- abs(gDiff - mean(gDiff))
   
-  threshold <- 3*mean(diff)
+  th <- 2.5*mean(diff)
+  gTh <- 2.5*mean(gDiff)
   
-  xout <- which(diff >= threshold)
+  xout <- which(diff >= th | gDiff >= gTh)
   
   xs <- (imgVarX$min:imgVarX$max)[-xout]
   ys <- curve[xs]

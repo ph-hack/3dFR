@@ -95,7 +95,7 @@ my.cosineDistance <- function(reference, target, method = "dct", coeffRange=c())
   
   dist = apply(matrix(c(ref, tar), nrow=2, byrow=TRUE), 2, function(x){ return(x[1] - x[2])})
   
-  return(list(error=error, dist=my.as.matrix(dist)))
+  return(list(error=error, dist=my.as.matrix(dist), target=matrix(c(1:(length(target)), target), ncol=2)))
 }
 
 applyDCT <- function(listData, meanCurves=list()){
@@ -135,7 +135,7 @@ applyDCT <- function(listData, meanCurves=list()){
 hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=character(0), subset=integer(0),
                                                 useErrorRange=TRUE, logFile="", errorFunctions=list(my.icp.2d.v2),
                                                 errorParams=list(list(minIter=4, pSample=0.2)), weightLimit=0.5,
-                                                evaluate=FALSE, weights=c()){
+                                                evaluate=FALSE, weights=c(), isToPlot=FALSE){
   
   #gets the files' names
   if(length(testing) == 0)
@@ -226,8 +226,15 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
           
           #gets the first level's representants
           representants <- list2matrix(getAllFieldFromList(branch, "representant", 2))
+          dists <- 1
+          targets <- 1
           
           passed <- 1
+          
+          #if(i == 5 && f == 1){
+          #  cat("\ngot it\n")
+          #  cat("\n")
+          #}
           
           #if there is more than one representant at this level
           if(!is.null(dim(representants))){
@@ -240,6 +247,7 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
             }, test)
             
             errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
+            targets <- getAllFieldFromList(icpResults, "target", 2)
             #errors <- list2vector(getAllFieldFromList(icpResults, "normalizedDistance", 2))
             #maxErrors <- list2vector(getAllFieldFromList(branch, "maxError", 2))
             ws <- list2vector(getAllFieldFromList(branch, "weight", 2))
@@ -254,12 +262,20 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
             }
             #retrieves which nodes of the first level matched the test
             #passed <- which(errors <= maxErrors & rangeCheck)
+            wFailed = which(ws > rep(weightLimit, length(ws)))
+            if (length(wFailed) > 0)
+              cat("[Removed by weight: ", wFailed, "]", file = logFile, append=TRUE)
+            rFailed = which(!rangeCheck)
+            if(length(rFailed) > 0)
+              cat("[Removed by error range: ", rFailed, "]", file = logFile, append=TRUE)
+            
             passed <- which(ws <= rep(weightLimit, length(ws)) & rangeCheck)
           }
           else{
             #computes the error with the single first level's representant
             icpResults <- do.call(errorFunctions[[f]], merge.list(list(representants, curveCorrection3(test, representants, 1)), errorParams[[f]]))
             #icpResults <- dtw(representants, curveCorrection3(test, representants, 1))
+            targets <- list(icpResults$target)
             #maxError <- list2vector(getAllFieldFromList(branch, "maxError", 2))
             ws <- list2vector(getAllFieldFromList(branch, "weight", 2))
             
@@ -269,10 +285,17 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
               
               errorRange <- getAllFieldFromList(branch, "errorRange", 2)
               rangeCheck <- checkErrorRange(errorRange, list(icpResults$dist))
+              dists <- list(icpResults$dist)
             }
             
             #checks whether the representant matched
             #passed <- which(icpResults$error <= maxError & rangeCheck)
+            if (ws > weightLimit)
+              cat("[Removed by weight: ", 1, "]", file = logFile, append=TRUE)
+            
+            if(!rangeCheck)
+              cat("[Removed by error range: ", 1, "]", file = logFile, append=TRUE)
+            
             passed <- which(ws <= weightLimit & rangeCheck)
           }
           
@@ -280,6 +303,30 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
           
           #if this is a leaf, ...
           if(is.null(branch[[1]]$children)){
+            
+            for(v in 1:(length(branch))){
+              if(isToPlot && length(passed) == 0 && names(branch)[v] == classes$fileClasses[m]){
+                
+                ymax = max(c(branch[[v]]$errorRange[,3], dists[[v]][,2]))
+                ymin = min(c(branch[[v]]$errorRange[,2], dists[[v]][,2]))
+                xmax = max(branch[[v]]$errorRange[,1], dists[[v]][,1])
+                xmin = min(branch[[v]]$errorRange[,1], dists[[v]][,1])
+                
+                #plots the error range graph
+                plot(c(1,xmax), c(ymin, ymax), col="white", main=concatenate(c("Error Range predictor ", f, ", ", i)))
+                lines(c(1,xmax), c(0,0), col="gray")
+                sorted <- sort.int(branch[[v]]$errorRange[,1], index.return = TRUE)$ix
+                meanRange = rowMeans(branch[[v]]$errorRange[(sorted),-1])
+                lines(x = branch[[v]]$errorRange[sorted,1], y = meanRange, col="green")
+                lines(x = branch[[v]]$errorRange[sorted,1], y = branch[[v]]$errorRange[sorted,2], col="red")
+                lines(x = branch[[v]]$errorRange[sorted,1], y = branch[[v]]$errorRange[sorted,3], col="red")
+                lines(dists[[v]], col="black")
+                
+                plot(branch[[v]]$representant, type="l", col="red", main=concatenate(c("Curves predictor ", f, ", ", i)))
+                lines(test, col="blue")
+                lines(x = targets[[v]][,1], y = targets[[v]][,2], col="black")
+              }
+            }
             
             for(v in passed){
               
