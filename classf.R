@@ -1756,7 +1756,7 @@ computeNodes <- function(samples, groups, children=0, errorFunction=my.icp.2d.v2
       node[["meanError"]] <- mean(errors)
       node[["deviation"]] <- sd(errors)
       node[["maxError"]] <- max(errors)
-      node[["maxError"]] <- node[["maxError"]] * criterias$maxError
+      node[["maxError"]] <- node[["maxError"]] * criterias$maxError + node[["deviation"]]
       node[["errorRange"]] <- computeErrorRanges(dists, criterias$errorRange)
       
       if(is.list(children)){
@@ -2188,7 +2188,10 @@ computeErrorRanges <- function(dists, add=1){
     
   }, dists, errorRanges)
   
-  errorRanges <- errorRanges[-1,]
+  if(errorRanges[1,1] == errorRanges[1,2] && errorRanges[1,2] == errorRanges[1,3] && errorRanges[1,3] == 0)
+    errorRanges <- errorRanges[-1,]
+  
+  #deviations <- lapply(dists)
   
   errorRanges[,2] <- errorRanges[,2] - add
   errorRanges[,3] <- errorRanges[,3] + add

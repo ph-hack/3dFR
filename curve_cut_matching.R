@@ -36,13 +36,14 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   primeTarget <- target
   
   #computes the descriptor lines of both curves
-  referenceLine <- linearInterpolation(reference, isOpt)
-  targetLine <- linearInterpolation(target, isOpt)
+  #referenceLine <- linearInterpolation(reference, isOpt)
+  #targetLine <- linearInterpolation(target, isOpt)
   
   #computes the angle between them
-  angle <- atan(referenceLine$a - targetLine$a)
+  #angle <- atan(referenceLine$a - targetLine$a)
+  angle <- angleBetween(reference, target)[1]
   #performs the rotation in the target to make it closer to the reference
-  target <- rotateCurve(target, 0, angle, isOpt)
+  target <- rotateCurve(target, 0, -angle, isOpt)
   
   #interpolates the points in order to obtain interger coordinates in X
   target <- interpolateXinteger(target, isOpt)
@@ -70,7 +71,8 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   }
   
   #computes the mean error
-  error <- mean(abs(distances[,2]))
+  #error <- mean(abs(distances[,2]))
+  error <- 100
   
   #initializes the prime error that will always be equal or less than error
   primeError <- error
@@ -79,6 +81,9 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
   i <- 1
   #initializes the energy with 0
   energy <- 0
+  
+  samples <- 0
+  refSamples <- 0
   
   #as long as the error keeps decreasing and the the maximum number of
   #iterations hasn't been reached ...
@@ -175,7 +180,8 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     #measures the distances for each point
     if(!isOpt2)
       target <- interpolateXinteger(target, isOpt)
-    distances <- dist.p2p(reference, target, isOpt)
+    #distances <- dist.p2p(reference, target, isOpt)
+    distances <- dist.p2p(reference[refSamples,], target[samples,], isOpt, 2)
     
     #checks whether the curves got too far
     if(commonDomain(reference, target, isOpt) >= threshold)
@@ -190,7 +196,8 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     i <- i + 1
   }
   #returns the informations
-  (list(target = primeTarget, dist = primeDistances, error = primeError, energyTotal = energy, energyMean = (energy/(i - 1))))
+  (list(target = primeTarget, dist = primeDistances, error = primeError, energyTotal = energy,
+        energyMean = (energy/(i - 1)), samples=samples, refSamples=refSamples))
 }
 
 getCorrespondents <- function(P1, P2){
@@ -216,20 +223,49 @@ getCorrespondents <- function(P1, P2){
   
   x <- rep(0, length(reference[,1]))
   
+  minRef = min(reference[,2])
+  maxRef = max(reference[,2])
+  minTar = min(target[,2])
+  maxTar = max(target[,2])
+  
+  target[,2] = ((target[,2] - minTar)*(maxRef-minRef))/(maxTar - minTar) + minRef
+  
+  Ds <- mapply(function(x,y,target){
+    
+    ds <- as.matrix(dist(rbind(matrix(c(x,y), nrow=1), target)))[-1,1]
+    return(min(ds))
+    
+  }, reference[,1], reference[,2], MoreArgs = list(target=target))
+  
+  Ds <- mean(Ds)
+  
   for(i in 1:(length(reference[,1]))){
     
     ds <- as.matrix(dist(rbind(reference[i,], target)))[1,-1]
-    x[i] <- which.min(ds)
-    target[x[i],2] <- 100000
+    if(min(ds) <= Ds){
+      
+      x[i] <- which.min(ds)
+      target[x[i],2] <- 100000
+    }
+    else{
+      
+      reference[i,1] <- 0.5
+    }
   }
+  
+  toRemove <- which(reference[,1] == 0.5)
+  y <- 1:(length(reference[,1]))
+  
+  if(length(toRemove) > 0)
+    y <- y[-toRemove]
   
   if(n1 > n2){
     
-    return(list(x, 1:n2))
+    return(list(x, y))
   }
   else if(n1 < n2){
     
-    return(list(1:n1, x))
+    return(list(y, x))
   }
 }
 
@@ -481,7 +517,7 @@ difference2 <- function(x, y, ix, iy, mx=0, my=0){
 }
 
 # Computes the distance in 'y' for each point by the target's coordinate
-dist.p2p <- function(reference, target, isOpt=FALSE){
+dist.p2p <- function(reference, target, isOpt=FALSE, type=1){
   
   n <- length(target[,1])
   
@@ -493,15 +529,35 @@ dist.p2p <- function(reference, target, isOpt=FALSE){
     
     m <- length(reference[,1])
     
-    xmin <- max(target[1,1], reference[1,1])
-    xmax <- min(reference[m,1], target[n,1])
+    xmin = 1
+    xmax = length(target[,1])
     
-    ref <- (Position(function(x){return(x == xmin)}, reference[,1]):Position(function(x){return(x == xmax)}, reference[,1]))
-    tar <- (Position(function(x){return(x == xmin)}, target[,1]):Position(function(x){return(x == xmax)}, target[,1]))
+    ref <- xmin:xmax
+    tar <- xmin:xmax
+    
+    if(type == 1){
+    
+      xmin <- max(target[1,1], reference[1,1])
+      xmax <- min(reference[m,1], target[n,1])
+      
+      ref <- (Position(function(x){return(x == xmin)}, reference[,1]):Position(function(x){return(x == xmax)}, reference[,1]))
+      tar <- (Position(function(x){return(x == xmin)}, target[,1]):Position(function(x){return(x == xmax)}, target[,1]))
+    }
     
     #distances <- mapply(difference, reference[ref,2], target[tar,2])
     #distances <- mapply(difference2, reference[ref,2], target[tar,2], reference[ref,1], target[tar,1], MoreArgs=list(reference, target))
-    distances <- mapply(difference2, reference[ref,2], target[tar,2], ref, tar, MoreArgs=list(reference, target))
+    #distances <- mapply(difference2, reference[ref,2], target[tar,2], ref, tar, MoreArgs=list(reference, target))
+    distances <- mapply(function(reference, target, ref, tar){
+      
+      m = matrix(c(ref, tar, reference, target), ncol=2)
+      d = as.matrix(dist(m))[-1,1]
+      
+      if(target > reference)
+        return(-d)
+      else
+        return(d)
+      
+    }, reference[ref,2], target[tar,2], reference[ref,1], target[tar,1])
     distances <- matrix(c(xmin:xmax, distances), ncol=2)
   }
   else{

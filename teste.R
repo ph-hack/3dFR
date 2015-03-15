@@ -1,10 +1,42 @@
+angleBetween <- function(c1, c2){
+  
+  n1 <- length(c1[,1])
+  n2 <- length(c2[,1])
+  
+  d1 <- mapply(difference, c1[1:(n1-1),2], c1[2:n1,2])
+  d2 <- mapply(difference, c2[1:(n2-1),2], c2[2:n2,2])
+  
+  angles <- mapply(function(x,y){
+    
+    return(atan(x - y))
+    
+  }, d1, d2)
+  
+  #computes the descriptor lines of both curves
+  line1 <- linearInterpolation(c1, TRUE)
+  line2 <- linearInterpolation(c2, TRUE)
+  
+  #computes the angle between them
+  angle <- atan(line1$a - line2$a)
+  
+  return(c(mean(angles), angle))
+}
+
 detectPeaks <- function(curve, smooth=0, isToPlot=FALSE){
   
   n <- length(curve)
-  if(smooth > 0 && smooth < n/2)
-  curve <- gaussianSmooth(c(rep(curve[1], 2*smooth), curve, rep(curve[n], 2*smooth)), c(smooth))[(1 + 2*smooth):(n + 2*smooth)]
+  M <- 1
+  g <- rep(0, n)
   
-  g <- gradient(curve)
+  while(M >= 0.09){
+    if(smooth > 0 && smooth < n/2)
+    scurve <- gaussianSmooth(c(rep(curve[1], 2*smooth), curve, rep(curve[n], 2*smooth)), c(smooth))[(1 + 2*smooth):(n + 2*smooth)]
+    
+    g <- gradient(scurve)
+    g <- gradient(g)
+    M <- mean(g)
+    smooth <- smooth + 1
+  }
   
   P <- mapply(function(x){
     
@@ -14,8 +46,8 @@ detectPeaks <- function(curve, smooth=0, isToPlot=FALSE){
         return (g[x] > g[w])
     }
     else{
-      return ((g[w[1]] < g[x] && g[x] > g[w[2]]) ||
-                (g[w[1]] > g[x] && g[x] < g[w[2]]))
+      return ((g[w[1]] < g[x] && g[x] > g[w[2]]))# ||
+                #(g[w[1]] > g[x] && g[x] < g[w[2]]))
     }
       
   }, 1:n)
@@ -264,10 +296,10 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
             #passed <- which(errors <= maxErrors & rangeCheck)
             wFailed = which(ws > rep(weightLimit, length(ws)))
             if (length(wFailed) > 0)
-              cat("[Removed by weight: ", wFailed, "]", file = logFile, append=TRUE)
+              cat(" [Removed by weight: ", wFailed, "]", file = logFile, append=TRUE)
             rFailed = which(!rangeCheck)
             if(length(rFailed) > 0)
-              cat("[Removed by error range: ", rFailed, "]", file = logFile, append=TRUE)
+              cat(" [Removed by error range: ", rFailed, "]", file = logFile, append=TRUE)
             
             passed <- which(ws <= rep(weightLimit, length(ws)) & rangeCheck)
           }
@@ -291,10 +323,10 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
             #checks whether the representant matched
             #passed <- which(icpResults$error <= maxError & rangeCheck)
             if (ws > weightLimit)
-              cat("[Removed by weight: ", 1, "]", file = logFile, append=TRUE)
+              cat(" [Removed by weight: ", 1, "]", file = logFile, append=TRUE)
             
             if(!rangeCheck)
-              cat("[Removed by error range: ", 1, "]", file = logFile, append=TRUE)
+              cat(" [Removed by error range: ", 1, "]", file = logFile, append=TRUE)
             
             passed <- which(ws <= weightLimit & rangeCheck)
           }
@@ -430,11 +462,11 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
         votesByDescriptor[[testing[m]]][[(f-1)*N + i]] <- votes[[f]][[i]]
       }
 
-      votes[[f]] <- Reduce(rbind, votes[[f]], matrix(c(0,0), nrow=1))[-1,]
-      dim(votes[[f]]) <- c(length(votes[[f]])/2, 2)
-  
-      if(is.null(dim(votes[[f]])))
-        dim(votes[[f]]) <- c(1,2)
+#       votes[[f]] <- Reduce(rbind, votes[[f]], matrix(c(0,0), nrow=1))[-1,]
+#       dim(votes[[f]]) <- c(length(votes[[f]])/2, 2)
+#   
+#       if(is.null(dim(votes[[f]])))
+#         dim(votes[[f]]) <- c(1,2)
     }
     
     #counts the votes
@@ -443,28 +475,68 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
     #dim(votes) <- c(length(votes)/2, 2)
     
     cat("\nvotes:\n", file=logFile, append=TRUE)
-    votesSizes <- rep(0, Nef)
-    for(f in 1:Nef){
-      cat.matrix(votes[[f]], file=logFile, append=TRUE)
-      votesSizes[f] <- length(votes[[f]][,1])
-      cat('------------- number: ', votesSizes[f], '\n', file=logFile, append=TRUE)
+#     votesSizes <- rep(0, Nef)
+#     for(f in 1:Nef){
+#       cat.matrix(votes[[f]], file=logFile, append=TRUE)
+#       votesSizes[f] <- length(votes[[f]][,1])
+#       cat('------------- number: ', votesSizes[f], '\n', file=logFile, append=TRUE)
+#     }
+#     cat("number of votes:", sum(votesSizes), "\n", file=logFile, append=TRUE)
+
+    finalVotes <- votes[[1]]
+
+    for(i in 1:N){
+      
+      if(length(finalVotes[[i]]) == 2)
+        dim(finalVotes[[i]]) <- c(1,2)
+      
+      if(length(votes[[2]][[i]]) == 2)
+        dim(votes[[2]][[i]]) <- c(1,2)
+      
+      Nv <- length(finalVotes[[i]][,2])
+      
+      if(Nv > 0){
+        for(j in 1:Nv){
+          
+          p <- Position(function(x){ return(x == finalVotes[[i]][j,1])}, votes[[2]][[i]][,1], nomatch = 0)
+          
+          if(p > 0){
+            
+            finalVotes[[i]][j,2] <- finalVotes[[i]][j,2] + votes[[2]][[i]][p,2]
+            
+            cat("desc", i, "class", finalVotes[[i]][j,1], ":", finalVotes[[i]][j,2], "+", votes[[2]][[i]][p,2], "\n", file = logFile, append = TRUE)
+          }
+          else{
+            
+            finalVotes[[i]][j,2] <- finalVotes[[i]][j,2] + 1
+            
+            cat("desc", i, "class", finalVotes[[i]][j,1], ":", finalVotes[[i]][j,2], "+ ", "1\n", file = logFile, append = TRUE)
+          }
+        }
+      }
     }
-    cat("number of votes:", sum(votesSizes), "\n", file=logFile, append=TRUE)
+
+    finalVotes <- Reduce(rbind, finalVotes, matrix(c(0,0), nrow=1))[-1,]
+    dim(finalVotes) <- c(length(finalVotes)/2, 2)
     
+    if(is.null(dim(finalVotes)))
+      dim(finalVotes) <- c(1,2)
+    
+    cat("votes number:", length(finalVotes[,1]), "\n", file=logFile, append=TRUE)
     
     #if(is.null(dim(votes)))
     #  dim(votes) <- c(1,2)
 
-    finalVotes <- matrix(rep(0,Nef*2), nrow=Nef)
-
-    for(f in 1:Nef){
-      
-      if(length(votes[[f]]) > 0){
-        result <- ponderateVote(votes[[f]], "min", "value")
-        finalVotes[f,1] <- result[1]
-        finalVotes[f,2] <- result[3]
-      }
-    }
+#     finalVotes <- matrix(rep(0,Nef*2), nrow=Nef)
+# 
+#     for(f in 1:Nef){
+#       
+#       if(length(votes[[f]]) > 0){
+#         result <- ponderateVote(votes[[f]], "min", "value")
+#         finalVotes[f,1] <- result[1]
+#         finalVotes[f,2] <- result[3]
+#       }
+#     }
 
     cat("final votes:\n", file=logFile, append=TRUE)
     cat.matrix(finalVotes, file=logFile, append=TRUE)
@@ -473,7 +545,7 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
     
     if(length(finalVotes) > 1){
       
-      result <- ponderateVote(finalVotes, by="max", type="value")
+      result <- ponderateVote(finalVotes, by="min", type="value")
       #checks the result
       if(paste("0", as.character(result[1]), sep="") == classes$fileClasses[m]){
         
