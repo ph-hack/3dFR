@@ -6,20 +6,29 @@ angleBetween <- function(c1, c2){
   d1 <- mapply(difference, c1[1:(n1-1),2], c1[2:n1,2])
   d2 <- mapply(difference, c2[1:(n2-1),2], c2[2:n2,2])
   
-  angles <- mapply(function(x,y){
-    
-    return(atan(x - y))
-    
-  }, d1, d2)
+#   angles <- mapply(function(x,y){
+#     
+#     return(atan(x - y))
+#     
+#   }, d1, d2)
+#   
+#   result <- mean(angles)
+
+  a1 <- mean(atan(d1))
+  a2 <- mean(atan(d2))
+
+  result <- a1 - a2
   
-  #computes the descriptor lines of both curves
-  line1 <- linearInterpolation(c1, TRUE)
-  line2 <- linearInterpolation(c2, TRUE)
-  
-  #computes the angle between them
-  angle <- atan(line1$a - line2$a)
-  
-  return(c(mean(angles), angle))
+#   #computes the descriptor lines of both curves
+#   line1 <- linearInterpolation(c1, TRUE)
+#   line2 <- linearInterpolation(c2, TRUE)
+#   
+#   #computes the angle between them
+#   angle <- atan(line1$a - line2$a)
+#   
+#   return(c(result, angle))
+
+    return(c(result, 1))
 }
 
 detectPeaks <- function(curve, smooth=0, isToPlot=FALSE){
