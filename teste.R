@@ -269,6 +269,8 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
           representants <- list2matrix(getAllFieldFromList(branch, "representant", 2))
           dists <- 1
           targets <- 1
+          refPoints <- 1
+          tarPoints <- 1
           
           passed <- 1
           
@@ -289,6 +291,10 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
             
             errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
             targets <- getAllFieldFromList(icpResults, "target", 2)
+            if(f == 1){
+              refPoints <- getAllFieldFromList(icpResults, "refSamples", 2)
+              tarPoints <- getAllFieldFromList(icpResults, "samples", 2)
+            }
             #errors <- list2vector(getAllFieldFromList(icpResults, "normalizedDistance", 2))
             #maxErrors <- list2vector(getAllFieldFromList(branch, "maxError", 2))
             ws <- list2vector(getAllFieldFromList(branch, "weight", 2))
@@ -317,6 +323,10 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
             icpResults <- do.call(errorFunctions[[f]], merge.list(list(representants, curveCorrection3(test, representants, 1)), errorParams[[f]]))
             #icpResults <- dtw(representants, curveCorrection3(test, representants, 1))
             targets <- list(icpResults$target)
+            if(f == 2){
+              refPoints <- list(icpResults$refSamples)
+              tarPoints <- list(icpResults$samples)
+            }
             #maxError <- list2vector(getAllFieldFromList(branch, "maxError", 2))
             ws <- list2vector(getAllFieldFromList(branch, "weight", 2))
             
@@ -366,6 +376,10 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
                 plot(branch[[v]]$representant, type="l", col="red", main=concatenate(c("Curves predictor ", f, ", ", i)))
                 lines(test, col="blue")
                 lines(x = targets[[v]][,1], y = targets[[v]][,2], col="black")
+                if(f == 1){
+                  points(refPoints[[v]], branch[[v]]$representant[refPoints[[v]]], col="red")
+                  points(targets[[v]][tarPoints[[v]],], col="black")
+                }
               }
             }
             
@@ -511,15 +525,13 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
           
           if(p > 0){
             
-            finalVotes[[i]][j,2] <- finalVotes[[i]][j,2] + votes[[2]][[i]][p,2]
-            
             cat("desc", i, "class", finalVotes[[i]][j,1], ":", finalVotes[[i]][j,2], "+", votes[[2]][[i]][p,2], "\n", file = logFile, append = TRUE)
+            finalVotes[[i]][j,2] <- finalVotes[[i]][j,2] + votes[[2]][[i]][p,2]
           }
           else{
             
-            finalVotes[[i]][j,2] <- finalVotes[[i]][j,2] + 1
-            
             cat("desc", i, "class", finalVotes[[i]][j,1], ":", finalVotes[[i]][j,2], "+ ", "1\n", file = logFile, append = TRUE)
+            finalVotes[[i]][j,2] <- finalVotes[[i]][j,2] + 1
           }
         }
       }

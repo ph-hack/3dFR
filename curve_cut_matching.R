@@ -180,8 +180,9 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     #measures the distances for each point
     if(!isOpt2)
       target <- interpolateXinteger(target, isOpt)
-    #distances <- dist.p2p(reference, target, isOpt)
-    distances <- dist.p2p(reference[refSamples,], target[samples,], isOpt, 2)
+    #distances <- dist.p2p(reference, target[samples,], isOpt, 2)
+    distances <- dist.p2p(reference, target, isOpt)
+    #distances <- dist.p2p(reference[refSamples,], target[samples,], isOpt, 2)
     
     #checks whether the curves got too far
     if(commonDomain(reference, target, isOpt) >= threshold)
@@ -543,22 +544,43 @@ dist.p2p <- function(reference, target, isOpt=FALSE, type=1){
       ref <- (Position(function(x){return(x == xmin)}, reference[,1]):Position(function(x){return(x == xmax)}, reference[,1]))
       tar <- (Position(function(x){return(x == xmin)}, target[,1]):Position(function(x){return(x == xmax)}, target[,1]))
     }
+    else{
+      
+      ref <- mapply(function(x, i, y){
+        
+        if(length(which(x == y)) > 0)
+          
+          return(i)
+        else
+          return(0)
+        
+      }, reference[,1], c(1:length(reference[,1])), MoreArgs = list(y=target[,1]))
+      
+      ref <- ref[-which(ref == 0)]
+      xmin <- min(reference[ref,1])
+      xmax <- max(reference[ref,1])
+      
+      toRemove <- which(target[tar,1] > xmax | target[tar,1] < xmin)
+      
+      if(length(toRemove) > 0)
+        tar <- tar[-toRemove]
+    }
     
     #distances <- mapply(difference, reference[ref,2], target[tar,2])
     #distances <- mapply(difference2, reference[ref,2], target[tar,2], reference[ref,1], target[tar,1], MoreArgs=list(reference, target))
-    #distances <- mapply(difference2, reference[ref,2], target[tar,2], ref, tar, MoreArgs=list(reference, target))
-    distances <- mapply(function(reference, target, ref, tar){
-      
-      m = matrix(c(ref, tar, reference, target), ncol=2)
-      d = as.matrix(dist(m))[-1,1]
-      
-      if(target > reference)
-        return(-d)
-      else
-        return(d)
-      
-    }, reference[ref,2], target[tar,2], reference[ref,1], target[tar,1])
-    distances <- matrix(c(xmin:xmax, distances), ncol=2)
+    distances <- mapply(difference2, reference[ref,2], target[tar,2], ref, tar, MoreArgs=list(reference, target))
+#     distances <- mapply(function(reference, target, ref, tar){
+#       
+#       m = matrix(c(ref, tar, reference, target), ncol=2)
+#       d = as.matrix(dist(m))[-1,1]
+#       
+#       if(target > reference)
+#         return(-d)
+#       else
+#         return(d)
+#       
+#     }, reference[ref,2], target[tar,2], reference[ref,1], target[tar,1])
+    distances <- matrix(c(target[tar,1], distances), ncol=2)
   }
   else{
     for(i in 1:n){

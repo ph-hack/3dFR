@@ -2044,7 +2044,7 @@ computeFamiliarityWeight <- function(level, similarityMatrix){
     if(is.na(outterSd))
       outterSd <- 0.000001
     
-    separability <- computeSeparability(list(mean=innerMean, sd=innerSd), list(mean=outterMean, sd=outterSd))
+    separability <- computeSeparability(list(mean=innerMean, sd=innerSd), list(mean=outterMean, sd=outterSd), 1)
     
     if(innerMean <= outterMean)
       level[[i]]$weight <- hierarchicalFamiliarityWeight(innerMean, separability)
