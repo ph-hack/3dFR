@@ -119,8 +119,8 @@ my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, 
     }
     else{
       
-      samples <- detectPeaks(target[,2], 1)
-      refSamples <- detectPeaks(reference[,2], 1)
+      samples <- detectPeaks(target[,2], 3)
+      refSamples <- detectPeaks(reference[,2], 3)
       
       newSamples <- getCorrespondents(target[samples,], reference[refSamples,])
       
@@ -224,12 +224,20 @@ getCorrespondents <- function(P1, P2){
   
   x <- rep(0, length(reference[,1]))
   
-  minRef = min(reference[,2])
-  maxRef = max(reference[,2])
-  minTar = min(target[,2])
-  maxTar = max(target[,2])
-  
-  target[,2] = ((target[,2] - minTar)*(maxRef-minRef))/(maxTar - minTar) + minRef
+#   minRef = min(reference[,2])
+#   maxRef = max(reference[,2])
+#   minTar = min(target[,2])
+#   maxTar = max(target[,2])
+#   
+#   target[,2] = ((target[,2] - minTar)*(maxRef-minRef))/(maxTar - minTar) + minRef
+
+  xMeanRef = mean(reference[,1])
+  yMeanRef = mean(reference[,2])
+  xMeanTar = mean(target[,1])
+  yMeanTar = mean(target[,2])
+
+  target[,2] <- target[,2] + yMeanRef - yMeanTar
+  target[,1] <- target[,1] + xMeanRef - xMeanTar
   
   Ds <- mapply(function(x,y,target){
     
@@ -239,10 +247,102 @@ getCorrespondents <- function(P1, P2){
   }, reference[,1], reference[,2], MoreArgs = list(target=target))
   
   Ds <- mean(Ds)
+
+  tarInit <- 1
+  tarN <- length(target[,1])
   
   for(i in 1:(length(reference[,1]))){
     
-    ds <- as.matrix(dist(rbind(reference[i,], target)))[1,-1]
+    ds <- as.matrix(dist(rbind(reference[i,], target[tarInit:tarN,])))[1,-1]
+      
+#     ok <- TRUE
+#     
+#     while(ok){
+#       
+#       tarI <- which.min(ds) + tarInit - 1
+#       wTar <- getWindow(target[,1], tarI, 1)
+#       wRef <- getWindow(reference[,1], i, 1)
+#       
+#       if(min(length(wTar), length(wRef)) < 2){
+#         
+#         aTar <- 0
+#         aRef <- 0
+#         
+#         if(length(wTar) < 2){
+#           if(tarI == tarInit)
+#             aTar <- findLine(target[tarI,], target[wTar,])$a
+#           else
+#             aTar <- findLine(target[wTar,], target[tarI,])$a
+#           }
+#         else{
+#           
+#           if(i == 1)
+#             aTar <- findLine(target[tarI,], target[wTar[2],])$a
+#           else
+#             aTar <- findLine(target[wTar[1],], target[tarI,])$a
+#         }
+#         
+#         if(length(wRef) < 2){
+#           if(i == 1)
+#             aRef <- findLine(reference[i,], reference[wRef,])$a
+#           else
+#             aRef <- findLine(reference[wRef,], reference[i,])$a
+#         }
+#         else{
+#           
+#           if(tarI == tarInit)
+#             aRef <- findLine(reference[i,], reference[wRef[2],])$a
+#           else
+#             aRef <- findLine(reference[wRef[1],], reference[i,])$a
+#         }
+#         
+#         if(aTar > aRef*0.66 && aTar < aRef*1.5){
+#           
+#           if(min(ds) <= Ds){
+#             x[i] <- tarI
+#             tarInit <- tarI
+#             target[x[i],2] <- 1000000
+#           }
+#           else
+#             reference[i,1] <- 0.5
+#           
+#           ok <- FALSE
+#         }
+#         else{
+#           
+#           ds[which.min(ds)] <- 10000000
+#         }
+#       }
+#       else{
+#         
+#         a1Tar <- findLine(target[wTar[1],], target[tarI,])$a
+#         a2Tar <- findLine(target[tarI,], target[wTar[2],])$a
+#         a1Ref <- findLine(reference[wRef[1],], reference[i,])$a
+#         a2Ref <- findLine(reference[i,], reference[wRef[2],])$a
+#         
+#         if(a1Tar > a1Ref*0.66 && a1Tar < a1Ref*1.5 && a2Tar > a2Ref*0.66 && a2Tar < a2Ref*1.5){
+#           
+#           if(min(ds) <= Ds){
+#             x[i] <- tarI
+#             tarInit <- tarI
+#             target[x[i],2] <- 1000000
+#           }
+#           else
+#             reference[i,1] <- 0.5
+#           
+#           ok <- FALSE
+#         }
+#         else{
+#           
+#           ds[which.min(ds)] <- 10000000
+#         }
+#       }
+#       if(min(ds) == 10000000){
+#         ok <- FALSE
+#         reference[i,1] <- 0.5
+#       }
+#     }
+    
     if(min(ds) <= Ds){
       
       x[i] <- which.min(ds)
@@ -257,8 +357,16 @@ getCorrespondents <- function(P1, P2){
   toRemove <- which(reference[,1] == 0.5)
   y <- 1:(length(reference[,1]))
   
-  if(length(toRemove) > 0)
+  if(length(toRemove) > 0){
     y <- y[-toRemove]
+    x <- x[-toRemove]
+  }
+  
+  if(length(y) < 2)
+    y <- 1:(length(reference[,2]))  
+
+  if(length(x) < 2)
+    x <- 1:(length(y))
   
   if(n1 > n2){
     
