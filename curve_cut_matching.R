@@ -224,20 +224,20 @@ getCorrespondents <- function(P1, P2){
   
   x <- rep(0, length(reference[,1]))
   
-#   minRef = min(reference[,2])
-#   maxRef = max(reference[,2])
-#   minTar = min(target[,2])
-#   maxTar = max(target[,2])
-#   
-#   target[,2] = ((target[,2] - minTar)*(maxRef-minRef))/(maxTar - minTar) + minRef
+  minRef = min(reference[,2])
+  maxRef = max(reference[,2])
+  minTar = min(target[,2])
+  maxTar = max(target[,2])
+  
+  target[,2] = ((target[,2] - minTar)*(maxRef-minRef))/(maxTar - minTar) + minRef
 
-  xMeanRef = mean(reference[,1])
-  yMeanRef = mean(reference[,2])
-  xMeanTar = mean(target[,1])
-  yMeanTar = mean(target[,2])
-
-  target[,2] <- target[,2] + yMeanRef - yMeanTar
-  target[,1] <- target[,1] + xMeanRef - xMeanTar
+#   xMeanRef = mean(reference[,1])
+#   yMeanRef = mean(reference[,2])
+#   xMeanTar = mean(target[,1])
+#   yMeanTar = mean(target[,2])
+# 
+#   target[,2] <- target[,2] + yMeanRef - yMeanTar
+#   target[,1] <- target[,1] + xMeanRef - xMeanTar
   
   Ds <- mapply(function(x,y,target){
     
@@ -362,11 +362,10 @@ getCorrespondents <- function(P1, P2){
     x <- x[-toRemove]
   }
   
-  if(length(y) < 2)
-    y <- 1:(length(reference[,2]))  
-
-  if(length(x) < 2)
-    x <- 1:(length(y))
+  if(length(y) < 2){
+    
+    return(list(1:(length(reference)), 1:(length(reference))))
+  }
   
   if(n1 > n2){
     
