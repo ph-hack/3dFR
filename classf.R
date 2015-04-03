@@ -1746,7 +1746,13 @@ computeNodes <- function(samples, groups, children=0, errorFunction=my.icp.2d.v2
       #compute the mean error and the mean error kind
       icpResults <- apply(thisClassSamples, 1, function(target, reference){
         
-        return (do.call(errorFunction, merge.list(list(reference, curveCorrection3(target, reference, 1)), errorParams)))
+        target = curveCorrection3(target, reference, 1)
+        return (tryCatch(do.call(errorFunction, merge.list(
+                                                list(reference, target), errorParams)),
+          error=function(e){cat("Error: ", e$message, "\ncall: ", paste(e$call[], sep=""),
+                                "\nrefernece:\n", reference, "\ntarget:\n", target, "\n\n",
+                                file="error.log", append=TRUE);
+                            return(100);}))
         
       }, meanClassSample)
       
@@ -1828,8 +1834,12 @@ computeGroupingByBrute <- function(nodes, nGroups=0, threshold=0, errorFunction,
   for(j in 1:(C-1)){
     for(k in (j+1):C){
       
-      similarityMatrix[j,k] <- do.call(errorFunction, merge.list(list(nodes[[j]][["representant"]],
-                                            nodes[[k]][["representant"]]), errorParams))$error
+      similarityMatrix[j,k] <- tryCatch(do.call(errorFunction, merge.list(list(nodes[[j]][["representant"]],
+                                            nodes[[k]][["representant"]]), errorParams))$error,
+                                        error=function(e){cat("Error: ", e$message, "\ncall: ",
+                                        paste(e$call[], sep=""), "\nJ:\n", nodes[[j]][["representant"]],
+                                        "\nK:\n", nodes[[k]][["representant"]], "\n\n", file="error.log",
+                                        append=TRUE); return(100);})
       similarityMatrix[k,j] <- similarityMatrix[j,k]
       
       if(progress){

@@ -34,18 +34,19 @@ angleBetween <- function(c1, c2){
 detectPeaks <- function(curve, smooth=0, isToPlot=FALSE){
   
   n <- length(curve)
-  #M <- 1
+  M <- 1
   g <- rep(0, n)
+  scurve <- curve
   
-  #while(M >= 0.09){
+  while(M >= 0.09){
     if(smooth > 0 && smooth < n/2)
     scurve <- gaussianSmooth(c(rep(curve[1], 2*smooth), curve, rep(curve[n], 2*smooth)), c(smooth))[(1 + 2*smooth):(n + 2*smooth)]
     
     g <- gradient(scurve)
     g <- gradient(g)
-  #  M <- mean(g)
-  #  smooth <- smooth + 1
-  #}
+    M <- mean(g)
+    smooth <- smooth + 1
+  }
   
   P <- mapply(function(x){
     
@@ -63,13 +64,18 @@ detectPeaks <- function(curve, smooth=0, isToPlot=FALSE){
   
   P <- which(P)
   
+  if(length(P) < 2)
+    P <- c(1,n)
+  
   if(isToPlot){
     
     curve <- setRange(curve)
     g <- setRange(g)
+    scurve <- setRange(scurve)
     
     plot(curve, type="l")
     lines(g, col="blue")
+    lines(scurve, col="green")
     
     for(p in P)
       lines(rep(p, 2), c(0,1), col="red")
