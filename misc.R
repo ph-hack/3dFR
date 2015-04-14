@@ -121,15 +121,17 @@ getAllFieldFromList <- function(theList, index=1, level=1){
 concatenateList <- function(listOfLists){
   
   n <- length(listOfLists)
+  m <- lapply(listOfLists, length)
   l <- list()
   
   for(i in 1:n){
     
-    m <- length(listOfLists[[i]])
-    
-    for(j in 1:m){
+    for(j in 1:m[[i]]){
       
-      l[[(i-1) * m + j]] <- listOfLists[[i]][[j]]
+      if(i == 1)
+        l[[j]] <- listOfLists[[i]][[j]]
+      else
+        l[[(i-1) * m[[i-1]] + j]] <- listOfLists[[i]][[j]]
     }
   }
   
@@ -519,4 +521,32 @@ merge.list <- function(x, y){
   }
   
   return(x)
+}
+
+my.smooth <- function(X, d=1){
+  
+  N <- length(X)
+  
+  if(d > 0){
+    X <- gaussianSmooth(c(rep(X[1], 2*d), X, rep(X[N], 2*d)), c(d))[(1 + 2*d):(N + 2*d)]
+  }
+  
+  return(X)
+}
+
+removeNullFromList <- function(L, returnVector=FALSE){
+  
+  A <- list()
+  N <- length(L)
+  
+  for(i in 1:N){
+    
+    if(!is.null(L[[i]]))
+      A[[length(A)+1]] <- L[[i]]
+  }
+  
+  if(returnVector)
+    return(list2vector(A))
+  
+  return(A)
 }

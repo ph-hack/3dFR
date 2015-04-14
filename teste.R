@@ -34,18 +34,18 @@ angleBetween <- function(c1, c2){
 detectPeaks <- function(curve, smooth=0, isToPlot=FALSE){
   
   n <- length(curve)
-  #M <- 1
+  M <- 1
   g <- rep(0, n)
   
-  #while(M >= 0.09){
+  while(M >= 0.09){
     if(smooth > 0 && smooth < n/2)
     scurve <- gaussianSmooth(c(rep(curve[1], 2*smooth), curve, rep(curve[n], 2*smooth)), c(smooth))[(1 + 2*smooth):(n + 2*smooth)]
     
     g <- gradient(scurve)
     g <- gradient(g)
-  #  M <- mean(g)
-  #  smooth <- smooth + 1
-  #}
+    M <- mean(g)
+    smooth <- smooth + 1
+  }
   
   P <- mapply(function(x){
     
@@ -78,14 +78,35 @@ detectPeaks <- function(curve, smooth=0, isToPlot=FALSE){
   return(P)
 }
 
-gradient <- function(curve){
+gradient <- function(curve, absolute=TRUE){
   
   N <- length(curve)
   G <- mapply(function(x, y){
     
     w <- getWindow(curve, y, 1)
     
-    return(sum(abs(x - curve[w]))/length(w))
+    g <- sum(abs(x - curve[w]))/length(w)
+    
+    if(!absolute){
+      
+      if(w[1] > y){
+        
+        if(x - curve[w[1]] > 0){
+          
+          g = -g
+        }
+      }
+      else{
+        
+        if(x - curve[w[1]] < 0){
+          
+          g = -g
+        }
+      }
+    }
+    
+    return(g)
+    
   }, curve, 1:N)
   
   return(G)
@@ -97,7 +118,7 @@ getWindow <- function(signal, idx, size){
   
   W <- c()
   
-  if(idx > N || idx < 1)
+  if(idx > N || idx < 1 || size <= 0)
     return(W)
   
   if(idx - size > 0)

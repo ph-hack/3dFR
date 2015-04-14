@@ -1,3 +1,362 @@
+my.dtwBasedDistance <- function(reference, target, smooth=0, W=0, range=0, threshold=0, tol=5){
+  
+  M <- length(reference)
+  N <- length(target)
+  
+  if(threshold == 0)
+    threshold <- round(M/3)
+
+  if(smooth > 0){
+    reference <- gaussianSmooth(c(rep(reference[1], 2*smooth), reference, rep(reference[M], 2*smooth)), c(smooth))[(1 + 2*smooth):(M + 2*smooth)]
+    target <- gaussianSmooth(c(rep(target[1], 2*smooth), target, rep(target[N], 2*smooth)), c(smooth))[(1 + 2*smooth):(N + 2*smooth)]
+  }
+  
+  #converts them into 2D matrices
+  reference <- my.as.matrix(reference)
+  target <- my.as.matrix(target)
+  
+  #takes out the null parts of both curves
+  reference <- takeNoneFaceOut(reference, TRUE)
+  target <- takeNoneFaceOut(target, TRUE)
+  
+  #computes the angle between them
+  #angle <- angleBetween(reference, target)[1]
+  #performs the rotation in the target to make it closer to the reference
+  #target <- rotateCurve(target, 0, -angle, TRUE)
+  #interpolates the points in order to obtain interger coordinates in X
+  #target <- interpolateXinteger(target, TRUE)
+  
+#   M <- length(reference[,2])
+#   N <- length(target[,2])
+#   
+#   dtw <- matrix(rep(100, (N+1)*(M+1)), nrow=N+1)
+#   dtw[1,1] <- 0
+  
+  #gRef <- gradient(reference[,2], FALSE)
+  gRef <- computeCurvature(reference, FALSE)
+  #gTar <- gradient(target[,2], FALSE)
+  gTar <- computeCurvature(target, FALSE)
+  
+  M <- length(gRef)
+  N <- length(gTar)
+  
+  dtw <- matrix(rep(100, (N+1)*(M+1)), nrow=N+1)
+  dtw[1,1] <- 0
+  
+  if(W == 0)
+    W <- M
+  else
+    W <- max(W, abs(N-M))
+  
+  for(i in 2:(N+1)){
+    
+    for(j in (max(2, i-W)):(min(M+1, i+W))){
+      
+      d <- my.gradDistance(gRef, gTar, j-1, i-1, range)
+      dmin <- min(dtw[i-1,j], dtw[i,j-1], dtw[i-1,j-1])
+      
+      #if(d <= dtw[i,j-1])
+      #  dtw[i,j] <- d
+      #else
+        dtw[i,j] <- d #+ dmin
+    }
+  }
+
+  dtw <- dtw[-1,-1]
+  
+  image(dtw, col = topo.colors(M*N), xlab = "Target", ylab = "Reference")
+  
+  startPtsTar <- mapply(function(x){
+    
+    if(x == 1 && dtw[1,x] < dtw[1,x+1])
+      return(c(1,x))
+    
+    else if(x == M && dtw[1,x] < dtw[1,x-1])
+      return(c(1,x))
+    
+    else if(dtw[1,x] < dtw[1,x-1] && dtw[1,x] < dtw[1,x+1])
+      return(c(1,x))
+    
+  }, 1:M)
+
+  startPtsRef <- mapply(function(x){
+    
+    if(x == 1 && dtw[x,1] < dtw[x+1,1])
+      return(c(x,1))
+    
+    else if(x == N && dtw[x,1] < dtw[x-1,1])
+      return(c(x,1))
+    
+    else if(dtw[x,1] < dtw[x-1,1] && dtw[x,1] < dtw[x+1,1])
+      return(c(x,1))
+    
+  }, 1:N)
+
+  startPtsRef <- removeNullFromList(startPtsRef)
+  startPtsTar <- removeNullFromList(startPtsTar)
+
+  startPoints <- concatenateList(list(startPtsTar, startPtsRef))
+
+  changeStart <- TRUE
+  i <- 1
+  j <- 1
+  pts <- list()
+  Np <- 0
+  tolerance <- 0
+  sPoint <- 0
+
+  while(changeStart){
+    
+    sPoint <- sPoint + 1
+    cat("sPoint: ", sPoint, " : ", startPoints[[sPoint]], "\n")
+    startPoint <- startPoints[[sPoint]]
+    
+    i <- startPoint[1]
+    j <- startPoint[2]
+    
+    Np <- Np + 1
+    pts[[Np]] <- c(i,j)
+    i <- i + 1
+    
+    findPoints <- TRUE
+    
+    while(findPoints){
+    
+      if(i <= N){
+        
+        if(j < M){
+          
+          if(dtw[i,j+1] <= dtw[i,j] && dtw[i,j+1] <= dtw[i-1,j+1]){
+            
+            Np <- Np + 1
+            j <- j + 1
+            pts[[Np]] <- c(i,j)
+            i <- i + 1
+          }
+          else if(dtw[i,j] < dtw[i,j+1] && dtw[i,j] <= dtw[i-1,j+1]){
+            
+            if(tolerance + 1 <= tol){
+              
+              Np <- Np + 1
+              pts[[Np]] <- c(i,j)
+              i <- i + 1
+              tolerance <- tolerance + 1
+            }
+            else{
+              
+              findPoints <- FALSE
+              if(sPoint == length(startPoints))
+                changeStart <- FALSE
+              Np <- 0
+              tolerance <- 0
+              pts <- list()
+            }
+          }
+          else if(dtw[i-1,j+1] < dtw[i,j+1] && dtw[i-1,j+1] < dtw[i,j]){
+            
+            if(tolerance - 1 >= -tol){
+              
+              Np <- Np + 1
+              j <- j + 1
+              pts[[Np]] <- c(i-1,j)
+              tolerance <- tolerance - 1
+            }
+            else{
+              
+              findPoints <- FALSE
+              if(sPoint == length(startPoints))
+                changeStart <- FALSE
+              Np <- 0
+              tolerance <- 0
+              pts <- list()
+            }
+          }
+        }
+        else{
+          
+          if(Np < threshold){
+            
+            Np <- 0
+            tolerance <- 0
+            pts <- list()
+            
+            if(sPoint == length(startPoints))
+              changeStart <- FALSE
+          }
+          else{
+            
+            changeStart <- FALSE
+          }
+          findPoints <- FALSE
+        }
+      }
+      else{
+        
+        if(Np < threshold){
+          
+          Np <- 0
+          tolerance <- 0
+          pts <- list()
+          
+          if(sPoint == length(startPoints))
+            changeStart <- FALSE
+        }
+        else{
+          
+          changeStart <- FALSE
+        }
+        findPoints <- FALSE
+      }
+    }
+  }
+
+  cat("Tolerance: ", tolerance, "\n")
+  
+  if(length(pts) > 0){
+    pts <- list2matrix(pts)
+    p <- pts
+    p[,1] <- p[,1]/N
+    p[,2] <- p[,2]/M
+    lines(p, col="red")
+    
+    minPoints <- apply(dtw, 1, which.min)
+    mp <- my.as.matrix(minPoints)
+    mp[,1] <- mp[,1]/N
+    mp[,2] <- mp[,2]/M
+    #points(mp, col="red")
+  
+    lastPoint <- pts[length(pts[,1]),]
+    
+    return(list(dtw=dtw, distance=dtw[lastPoint[1], lastPoint[2]], points=pts, minPoints=minPoints))
+  }
+  else{
+    
+    cat("No match found!\n")
+    return(list(dtw=dtw, distance=100, points=c(), minPoints=c()))
+  }
+}
+
+my.gradDistance <- function(C1, C2, x1, x2, range=0){
+  
+  #g1 <- gradient(C1, FALSE)
+  #g2 <- gradient(C2, FALSE)
+  g1 <- C1
+  g2 <- C2
+  
+  w1 <- getWindow(g1, x1, range)
+  w2 <- getWindow(g2, x2, range)
+  
+  D <- abs(g1[x1] - g2[x2])
+  d <- 0
+  
+  if(length(w1) > 0 && length(w2) > 0){
+    
+    weights <- mapply(function(x){
+      
+      return(x*1/(2*range))
+    }, 1:range)
+    weights <- c(weights[range:1], weights)
+    
+    d <- mapply(function(k,w,x,y,X,Y){
+      
+      if(is.na(X[x+w]) || is.na(Y[y+w]) || length(X[x+w]) != 1 || length(Y[y+w]) != 1)
+        return(100)
+      
+      else{
+        
+        return(abs(k * (X[x+w] - Y[y+w])))
+      }
+    }, weights, c(-range:-1,1:range), MoreArgs = list(x=x1, y=x2, X=g1, Y=g2))
+    
+    d <- list2vector(d)
+    
+    noNeighbor <- which(d == 100)
+    if(length(noNeighbor) > 0)
+      d <- d[-noNeighbor]
+    
+  }
+  return(D + sum(d))
+}
+
+computeCurvature <- function(data, absolute=TRUE){
+  
+  if(length(dim(data)) < 2)
+    data <- my.as.matrix(data)
+  
+  N <- length(data[,2])
+  
+  C <- mapply(function(i, X, Y){
+    
+    a <- 0
+    
+    if(i == 1){
+      
+      a <- pi/2
+      
+      if(X[i+1] - X[i] != 0)
+        a <- atan(angularCoeff(X[i], Y[i], X[i+1], Y[i+1]))
+      
+      if(Y[i] > Y[i+1])
+        a <- pi/2 + a
+    }
+    else if(i == N){
+      
+      a <- pi/2
+      
+      if(X[i-1] - X[i] != 0)
+        a <- atan(angularCoeff(X[i], Y[i], X[i-1], Y[i-1]))
+      
+      if(Y[i-1] > Y[i])
+        a <- pi/2 + a
+    }
+    else{
+      
+      a1 <- pi/2
+      
+      if(Y[i] > Y[i+1])
+        a1 <- -a1
+      
+      if(X[i+1] - X[i] != 0)
+        a1 <- atan(angularCoeff(X[i], Y[i], X[i+1], Y[i+1]))
+      
+      a2 <- pi/2
+      
+      if(Y[i-1] > Y[i])
+        a2 <- -a2
+      
+      if(X[i-1] - X[i] != 0)
+        a2 <- atan(angularCoeff(X[i], Y[i], X[i-1], Y[i-1]))
+      
+      if(a1 >= 0 && a2 >= 0){
+        
+        a1 <- pi/2 - a1
+        a <- a1 + a2 + pi/2
+      }
+      else if(a1 < 0 && a2 < 0){
+        
+        a2 <- pi/2 + a2
+        a <- -a1 + a2 + pi/2
+      }
+      else if(a1 >= 0 && a2 < 0){
+        
+        a <- pi + a2 - a1
+      }
+      else{
+        
+        a <- pi + a2 - a1
+      }
+    }
+    
+    return(a)
+    
+  }, 2:(N-1), MoreArgs = list(X=data[,1], Y=data[,2]))
+  
+  if(absolute)
+    return(abs(C))
+  else
+    return(C)
+}
+
 my.icp.2d.v2 <- function(reference, target, maxIter=10, minIter=5, pSample=0.5, threshold=0, isOpt=TRUE, isOpt2=TRUE){
   
   #gets the amount of points, a.k.a. the domain
