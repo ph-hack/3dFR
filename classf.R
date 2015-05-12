@@ -1668,6 +1668,11 @@ hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupN
       samples <- getAllFieldFromList(descriptors, i, 2)
       #puts them into a matrix
       samples <- list2matrix(samples)
+      
+      if(i < 4){
+        
+        samples <- samples[,1:100]
+      }
     
       #creates the first C nodes, where C = number of classes
       currentLevel <- computeNodes(samples, classes$fileClasses, errorFunction = errorFunctions[[f]],
@@ -1734,6 +1739,8 @@ computeNodes <- function(samples, groups, children=0, errorFunction=my.icp.2d.v2
       node[["meanError"]] <- children[[thisClassSamplesIndex]]$meanError
       node[["maxError"]] <- children[[thisClassSamplesIndex]]$maxError
       node[["deviation"]] <- children[[thisClassSamplesIndex]]$deviation
+      node[["variation"]] <- children[[thisClassSamplesIndex]]$variation
+      node[["errors"]] <- children[[thisClassSamplesIndex]]$errors
       node[["errorRange"]] <- children[[thisClassSamplesIndex]]$errorRange
       node[["children"]] <- children[thisClassSamplesIndex]
     }
@@ -1753,8 +1760,10 @@ computeNodes <- function(samples, groups, children=0, errorFunction=my.icp.2d.v2
       errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
       dists <- getAllFieldFromList(icpResults, "dist", 2)
       
-      node[["meanError"]] <- mean(errors)
-      node[["deviation"]] <- sd(errors)
+      node[["meanError"]] <- meanOfInterval(errors)
+      node[["deviation"]] <- sum(abs(errors - meanOfInterval(errors)))/length(errors) #sd(errors)
+      node[["variation"]] <- var(errors)
+      node[["errors"]] <- errors
       node[["maxError"]] <- max(errors)
       node[["maxError"]] <- node[["maxError"]] * criterias$maxError + node[["deviation"]]
       node[["errorRange"]] <- computeErrorRanges(dists, criterias$errorRange)
@@ -2038,13 +2047,13 @@ computeFamiliarityWeight <- function(level, similarityMatrix){
     if(is.na(innerSd))
       innerSd <- 0.000001
     
-    outterMean <- mean(similarityMatrix[i,-i])
-    outterSd <- sd(similarityMatrix[i,-i])
+    outterMean <- meanOfInterval(similarityMatrix[i,-i])
+    outterSd <- sum(abs(similarityMatrix[i,-i] - meanOfInterval(similarityMatrix[i,-i])))/length(similarityMatrix[i,-i])
     
     if(is.na(outterSd))
       outterSd <- 0.000001
     
-    separability <- computeSeparability(list(mean=innerMean, sd=innerSd), list(mean=outterMean, sd=outterSd), 1)
+    separability <-  computeSeparability(list(mean=innerMean, sd=innerSd), list(mean=outterMean, sd=outterSd), 1)
     
     if(innerMean <= outterMean)
       level[[i]]$weight <- hierarchicalFamiliarityWeight(innerMean, separability)

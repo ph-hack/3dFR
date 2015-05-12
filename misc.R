@@ -550,3 +550,8 @@ removeNullFromList <- function(L, returnVector=FALSE){
   
   return(A)
 }
+
+meanOfInterval <- function(X){
+  
+  return((max(X) + min(X))/2)
+}

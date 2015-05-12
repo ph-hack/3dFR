@@ -229,7 +229,12 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
     #puts them into a matrix
     samples <- list2matrix(samples)
     #puts this matrix into tests list
-    tests[[i]] <- samples
+    if(i < 4){
+      tests[[i]] <- samples[,1:100]
+      dim(tests[[i]]) <- c(length(tests[[i]])/100,100)
+    }
+    else
+      tests[[i]] <- samples
   }
   
   corrects <- 0
@@ -292,6 +297,7 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
           targets <- 1
           refPoints <- 1
           tarPoints <- 1
+          errors <- c()
           
           passed <- 1
           
@@ -312,10 +318,10 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
             
             errors <- list2vector(getAllFieldFromList(icpResults, "error", 2))
             targets <- getAllFieldFromList(icpResults, "target", 2)
-            if(f == 1){
-              refPoints <- getAllFieldFromList(icpResults, "refSamples", 2)
-              tarPoints <- getAllFieldFromList(icpResults, "samples", 2)
-            }
+            #if(f == 1){
+            #  refPoints <- getAllFieldFromList(icpResults, "refSamples", 2)
+            #  tarPoints <- getAllFieldFromList(icpResults, "samples", 2)
+            #}
             #errors <- list2vector(getAllFieldFromList(icpResults, "normalizedDistance", 2))
             #maxErrors <- list2vector(getAllFieldFromList(branch, "maxError", 2))
             ws <- list2vector(getAllFieldFromList(branch, "weight", 2))
@@ -344,10 +350,11 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
             icpResults <- do.call(errorFunctions[[f]], merge.list(list(representants, curveCorrection3(test, representants, 1)), errorParams[[f]]))
             #icpResults <- dtw(representants, curveCorrection3(test, representants, 1))
             targets <- list(icpResults$target)
-            if(f == 2){
-              refPoints <- list(icpResults$refSamples)
-              tarPoints <- list(icpResults$samples)
-            }
+            errors <- icpResults$error
+            #if(f == 2){
+            #  refPoints <- list(icpResults$refSamples)
+            #  tarPoints <- list(icpResults$samples)
+            #}
             #maxError <- list2vector(getAllFieldFromList(branch, "maxError", 2))
             ws <- list2vector(getAllFieldFromList(branch, "weight", 2))
             
@@ -376,57 +383,58 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
           #if this is a leaf, ...
           if(is.null(branch[[1]]$children)){
             
-            for(v in 1:(length(branch))){
-              if(isToPlot && length(passed) == 0 && names(branch)[v] == classes$fileClasses[m]){
-                
-                ymax = max(c(branch[[v]]$errorRange[,3], dists[[v]][,2]))
-                ymin = min(c(branch[[v]]$errorRange[,2], dists[[v]][,2]))
-                xmax = max(branch[[v]]$errorRange[,1], dists[[v]][,1])
-                xmin = min(branch[[v]]$errorRange[,1], dists[[v]][,1])
-                
-                #plots the error range graph
-                plot(c(1,xmax), c(ymin, ymax), col="white", main=concatenate(c("Error Range predictor ", f, ", ", i)))
-                lines(c(1,xmax), c(0,0), col="gray")
-                sorted <- sort.int(branch[[v]]$errorRange[,1], index.return = TRUE)$ix
-                meanRange = rowMeans(branch[[v]]$errorRange[(sorted),-1])
-                lines(x = branch[[v]]$errorRange[sorted,1], y = meanRange, col="green")
-                lines(x = branch[[v]]$errorRange[sorted,1], y = branch[[v]]$errorRange[sorted,2], col="red")
-                lines(x = branch[[v]]$errorRange[sorted,1], y = branch[[v]]$errorRange[sorted,3], col="red")
-                lines(dists[[v]], col="black")
-                
-                plot(branch[[v]]$representant, type="l", col="red", main=concatenate(c("Curves predictor ", f, ", ", i)))
-                lines(test, col="blue")
-                lines(x = targets[[v]][,1], y = targets[[v]][,2], col="black")
-                if(f == 1){
-                  points(refPoints[[v]], branch[[v]]$representant[refPoints[[v]]], col="red")
-                  points(targets[[v]][tarPoints[[v]],], col="black")
-                }
-              }
-            }
+#             for(v in 1:(length(branch))){
+#               if(isToPlot && length(passed) == 0 && names(branch)[v] == classes$fileClasses[m]){
+#                 
+#                 ymax = max(c(branch[[v]]$errorRange[,3], dists[[v]][,2]))
+#                 ymin = min(c(branch[[v]]$errorRange[,2], dists[[v]][,2]))
+#                 xmax = max(branch[[v]]$errorRange[,1], dists[[v]][,1])
+#                 xmin = min(branch[[v]]$errorRange[,1], dists[[v]][,1])
+#                 
+#                 #plots the error range graph
+#                 plot(c(1,xmax), c(ymin, ymax), col="white", main=concatenate(c("Error Range predictor ", f, ", ", i)))
+#                 lines(c(1,xmax), c(0,0), col="gray")
+#                 sorted <- sort.int(branch[[v]]$errorRange[,1], index.return = TRUE)$ix
+#                 meanRange = rowMeans(branch[[v]]$errorRange[(sorted),-1])
+#                 lines(x = branch[[v]]$errorRange[sorted,1], y = meanRange, col="green")
+#                 lines(x = branch[[v]]$errorRange[sorted,1], y = branch[[v]]$errorRange[sorted,2], col="red")
+#                 lines(x = branch[[v]]$errorRange[sorted,1], y = branch[[v]]$errorRange[sorted,3], col="red")
+#                 lines(dists[[v]], col="black")
+#                 
+#                 plot(branch[[v]]$representant, type="l", col="red", main=concatenate(c("Curves predictor ", f, ", ", i)))
+#                 lines(test, col="blue")
+#                 lines(x = targets[[v]][,1], y = targets[[v]][,2], col="black")
+#                 if(f == 1){
+#                   points(refPoints[[v]], branch[[v]]$representant[refPoints[[v]]], col="red")
+#                   points(targets[[v]][tarPoints[[v]],], col="black")
+#                 }
+#               }
+#             }
             
             for(v in passed){
               
               cat("\n", concatenate(rep("   ", levelIndex[[1]][1])), " leaf(", names(branch)[v], ")", file=logFile, append=TRUE)
               
               #gets the leaf's samples
-              samples <- branch[[v]]$samples
+              #samples <- branch[[v]]$samples
               #computes the errors for each leaf sample
-              icpResults <- apply(samples, 1, function(reference, target){
+              #icpResults <- apply(samples, 1, function(reference, target){
                 
-                return (do.call(errorFunctions[[f]], merge.list(list(curveCorrection3(reference, representants[v,], 1),
-                                                                     curveCorrection3(target, representants[v,], 1)),
-                                                                errorParams[[f]])))
+              #  return (do.call(errorFunctions[[f]], merge.list(list(curveCorrection3(reference, representants[v,], 1),
+              #                                                       curveCorrection3(target, representants[v,], 1)),
+              #                                                  errorParams[[f]])))
                 #return (dtw(curveCorrection3(reference, representants[v,], 1), curveCorrection3(target, representants[v,], 1)))
                 
-              }, test)
+              #}, test)
               #gets the minimum computed error
-              minErrorIndex <- which.min(list2vector(getAllFieldFromList(icpResults, "error", 2)))
+              #minErrorIndex <- which.min(list2vector(getAllFieldFromList(icpResults, "error", 2)))
               #minErrorIndex <- which.min(list2vector(getAllFieldFromList(icpResults, "normalizedDistance", 2)))
               #minError <- list2vector(getAllFieldFromList(icpResults, "error", 2))[minErrorIndex]
-              minError <- mean(list2vector(getAllFieldFromList(icpResults, "error", 2))) #/branch[[v]]$maxError
+              minError <- errors[v]
+              #minError <- mean(list2vector(getAllFieldFromList(icpResults, "error", 2))) #/branch[[v]]$maxError
               #minError <- list2vector(getAllFieldFromList(icpResults, "normalizedDistance", 2))[minErrorIndex]
               
-              cat(" -------", minErrorIndex, "------", file=logFile, append=TRUE)
+              #cat(" -------", minErrorIndex, "------", file=logFile, append=TRUE)
               cat(" E =", minError, file=logFile, append=TRUE)
               
               maxWeightErrors <- c(maxWeightErrors, branch[[v]]$deviation + branch[[v]]$meanError)
@@ -529,34 +537,34 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
 
     finalVotes <- votes[[1]]
 
-    for(i in 1:N){
-      
-      if(length(finalVotes[[i]]) == 2)
-        dim(finalVotes[[i]]) <- c(1,2)
-      
-      if(length(votes[[2]][[i]]) == 2)
-        dim(votes[[2]][[i]]) <- c(1,2)
-      
-      Nv <- length(finalVotes[[i]][,2])
-      
-      if(Nv > 0){
-        for(j in 1:Nv){
-          
-          p <- Position(function(x){ return(x == finalVotes[[i]][j,1])}, votes[[2]][[i]][,1], nomatch = 0)
-          
-          if(p > 0){
-            
-            cat("desc", i, "class", finalVotes[[i]][j,1], ":", finalVotes[[i]][j,2], "+", votes[[2]][[i]][p,2], "\n", file = logFile, append = TRUE)
-            finalVotes[[i]][j,2] <- finalVotes[[i]][j,2] + votes[[2]][[i]][p,2]
-          }
-          else{
-            
-            cat("desc", i, "class", finalVotes[[i]][j,1], ":", finalVotes[[i]][j,2], "+ ", "1\n", file = logFile, append = TRUE)
-            finalVotes[[i]][j,2] <- finalVotes[[i]][j,2] + 1
-          }
-        }
-      }
-    }
+#     for(i in 1:N){
+#       
+#       if(length(finalVotes[[i]]) == 2)
+#         dim(finalVotes[[i]]) <- c(1,2)
+#       
+#       if(length(votes[[2]][[i]]) == 2)
+#         dim(votes[[2]][[i]]) <- c(1,2)
+#       
+#       Nv <- length(finalVotes[[i]][,2])
+#       
+#       if(Nv > 0){
+#         for(j in 1:Nv){
+#           
+#           p <- Position(function(x){ return(x == finalVotes[[i]][j,1])}, votes[[2]][[i]][,1], nomatch = 0)
+#           
+#           if(p > 0){
+#             
+#             cat("desc", i, "class", finalVotes[[i]][j,1], ":", finalVotes[[i]][j,2], "+", votes[[2]][[i]][p,2], "\n", file = logFile, append = TRUE)
+#             finalVotes[[i]][j,2] <- finalVotes[[i]][j,2] + votes[[2]][[i]][p,2]
+#           }
+#           else{
+#             
+#             cat("desc", i, "class", finalVotes[[i]][j,1], ":", finalVotes[[i]][j,2], "+ ", "1\n", file = logFile, append = TRUE)
+#             finalVotes[[i]][j,2] <- finalVotes[[i]][j,2] + 1
+#           }
+#         }
+#       }
+#     }
 
     finalVotes <- Reduce(rbind, finalVotes, matrix(c(0,0), nrow=1))[-1,]
     dim(finalVotes) <- c(length(finalVotes)/2, 2)

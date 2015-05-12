@@ -1,3 +1,230 @@
+my.dtwBasedDistance2 <- function(reference, target, smooth=0, range=0, threshold=0, tol=5, useTolAsWeight=0){
+  
+  M <- length(reference)
+  N <- length(target)
+  
+  if(threshold == 0)
+    threshold <- round(M/3)
+  
+  if(smooth > 0){
+    reference <- gaussianSmooth(c(rep(reference[1], 2*smooth), reference, rep(reference[M], 2*smooth)), c(smooth))[(1 + 2*smooth):(M + 2*smooth)]
+    target <- gaussianSmooth(c(rep(target[1], 2*smooth), target, rep(target[N], 2*smooth)), c(smooth))[(1 + 2*smooth):(N + 2*smooth)]
+  }
+  
+  #converts them into 2D matrices
+  reference <- my.as.matrix(reference)
+  target <- my.as.matrix(target)
+  
+  #takes out the null parts of both curves
+  reference <- takeNoneFaceOut(reference, TRUE)
+  target <- takeNoneFaceOut(target, TRUE)
+  
+  #gRef <- gradient(reference[,2], FALSE)
+  gRef <- computeCurvature(reference, FALSE)
+  #gTar <- gradient(target[,2], FALSE)
+  gTar <- computeCurvature(target, FALSE)
+  
+  M <- length(gRef)
+  N <- length(gTar)
+  
+  dtwRef <- mapply(my.gradDistance, 1, 1:M, MoreArgs = list(C1=gTar, C2=gRef, range=range))
+  dtwTar <- mapply(my.gradDistance, 1, 1:N, MoreArgs = list(C1=gRef, C2=gTar, range=range))
+  
+  if(is.list(dtwRef))
+    dtwRef <- list2vector(dtwRef)
+  
+  if(is.list(dtwTar))
+    dtwTar <- list2vector(dtwTar)
+  
+  dtw <- matrix(rep(100, N*M), ncol=M)
+  dtw[1,] <- dtwRef
+  dtw[,1] <- dtwTar
+  
+  startPtsTar <- mapply(function(x){
+    
+    if(x == 1 && dtw[1,x] < dtw[1,x+1])
+      return(c(1,x))
+    
+    else if(x == M && dtw[1,x] < dtw[1,x-1])
+      return(c(1,x))
+    
+    else if(dtw[1,x] < dtw[1,x-1] && dtw[1,x] < dtw[1,x+1])
+      return(c(1,x))
+    
+  }, 1:M)
+  
+  startPtsRef <- mapply(function(x){
+    
+    if(x == 1 && dtw[x,1] < dtw[x+1,1])
+      return(c(x,1))
+    
+    else if(x == N && dtw[x,1] < dtw[x-1,1])
+      return(c(x,1))
+    
+    else if(dtw[x,1] < dtw[x-1,1] && dtw[x,1] < dtw[x+1,1])
+      return(c(x,1))
+    
+  }, 1:N)
+  
+  startPtsRef <- removeNullFromList(startPtsRef)
+  startPtsTar <- removeNullFromList(startPtsTar)
+  
+  startPoints <- concatenateList(list(startPtsTar, startPtsRef))
+  
+  changeStart <- TRUE
+  i <- 1
+  j <- 1
+  pts <- list()
+  Np <- 0
+  Tp <- 0
+  tolerance <- 0
+  sPoint <- 0
+  distance <- 0
+  
+  while(changeStart){
+    
+    sPoint <- sPoint + 1
+    #cat("sPoint: ", sPoint, " : ", startPoints[[sPoint]], "\n")
+    startPoint <- startPoints[[sPoint]]
+    
+    i <- startPoint[1]
+    j <- startPoint[2]
+    
+    distance <- distance + dtw[i,j]
+    
+    Np <- Np + 1
+    Tp <- Tp + 1
+    pts[[Np]] <- c(i,j)
+    i <- i + 1
+    
+    findPoints <- TRUE
+    
+    while(findPoints){
+      
+      if(i <= N){
+        
+        if(j < M){
+          
+          dtw[i,j+1] <- my.gradDistance(i, j+1, gTar, gRef, range)
+          dtw[i,j] <- my.gradDistance(i, j, gTar, gRef, range)
+          dtw[i-1,j+1] <- my.gradDistance(i-1, j+1, gTar, gRef, range)
+          
+          if(dtw[i,j+1] <= dtw[i,j] && dtw[i,j+1] <= dtw[i-1,j+1]){
+            
+            Np <- Np + 1
+            Tp <- Tp + 1
+            j <- j + 1
+            distance <- distance + dtw[i,j]
+            pts[[Np]] <- c(i,j)
+            i <- i + 1
+          }
+          else if(dtw[i,j] < dtw[i,j+1] && dtw[i,j] <= dtw[i-1,j+1]){
+            
+            if(tolerance + 1 <= tol){
+              
+              Np <- Np + 1
+              Tp <- Tp + 1
+              distance <- distance + dtw[i,j]
+              pts[[Np]] <- c(i,j)
+              i <- i + 1
+              tolerance <- tolerance + 1
+            }
+            else{
+              
+              findPoints <- FALSE
+              if(sPoint == length(startPoints))
+                changeStart <- FALSE
+              Np <- 0
+              Tp <- 0
+              tolerance <- 0
+              pts <- list()
+              distance <- 0
+            }
+          }
+          else if(dtw[i-1,j+1] < dtw[i,j+1] && dtw[i-1,j+1] < dtw[i,j]){
+            
+            if(tolerance - 1 >= -tol){
+              
+              Np <- Np + 1
+              j <- j + 1
+              distance <- distance + dtw[i-1,j]
+              pts[[Np]] <- c(i-1,j)
+              tolerance <- tolerance - 1
+            }
+            else{
+              
+              findPoints <- FALSE
+              if(sPoint == length(startPoints))
+                changeStart <- FALSE
+              Np <- 0
+              Tp <- 0
+              tolerance <- 0
+              pts <- list()
+              distance <- 0
+            }
+          }
+        }
+        else{
+          
+          if(Np < threshold){
+            
+            Np <- 0
+            Tp <- 0
+            tolerance <- 0
+            pts <- list()
+            distance <- 0
+            
+            if(sPoint == length(startPoints))
+              changeStart <- FALSE
+          }
+          else{
+            
+            changeStart <- FALSE
+          }
+          findPoints <- FALSE
+        }
+      }
+      else{
+        
+        if(Tp < threshold){
+          
+          Np <- 0
+          Tp <- 0
+          tolerance <- 0
+          pts <- list()
+          distance <- 0
+          
+          if(sPoint == length(startPoints))
+            changeStart <- FALSE
+        }
+        else{
+          
+          changeStart <- FALSE
+        }
+        findPoints <- FALSE
+      }
+    }
+  }
+  
+  #cat("Tolerance: ", tolerance, "\n")
+  
+  if(length(pts) > 0){
+    pts <- list2matrix(pts)
+    
+    if(useTolAsWeight > 0){
+      
+      distance <- distance * (1 + (useTolAsWeight * abs(tolerance))/tol)
+    }
+    
+    return(list(dtw=dtw, error=distance/(Tp^2), distance=distance, points=pts, tolerance=tolerance, target=target, dist=my.as.matrix(dtw[pts])))
+  }
+  else{
+    
+    #cat("No match found!\n")
+    return(list(dtw=dtw, error=0.02, distance=100, points=c(), tolerance=tol, target=target, dist=my.as.matrix(rep(100, length(target)))))
+  }
+}
+
 my.dtwBasedDistance <- function(reference, target, smooth=0, W=0, range=0, threshold=0, tol=5){
   
   M <- length(reference)
@@ -52,7 +279,7 @@ my.dtwBasedDistance <- function(reference, target, smooth=0, W=0, range=0, thres
     
     for(j in (max(2, i-W)):(min(M+1, i+W))){
       
-      d <- my.gradDistance(gRef, gTar, j-1, i-1, range)
+      d <- my.gradDistance(j-1, i-1, gRef, gTar, range)
       dmin <- min(dtw[i-1,j], dtw[i,j-1], dtw[i-1,j-1])
       
       #if(d <= dtw[i,j-1])
@@ -236,7 +463,7 @@ my.dtwBasedDistance <- function(reference, target, smooth=0, W=0, range=0, thres
   }
 }
 
-my.gradDistance <- function(C1, C2, x1, x2, range=0){
+my.gradDistance <- function(x1, x2, C1, C2, range=0){
   
   #g1 <- gradient(C1, FALSE)
   #g2 <- gradient(C2, FALSE)
