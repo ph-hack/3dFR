@@ -36,16 +36,17 @@ hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupN
   
   nGroups <- length(groupNumbers)
   
-  for(j in 1:nGroups){
+  for(g in groupNumbers){
     
     #divides the leafs into groups
-    gResult <- computeGrouping(fittingResults, groupNumbers[j], progress=TRUE)
+    gResult <- computeGrouping(fittingResults, g, progress=TRUE)
     currentLevel <- gResult$level
     #mounts the first level
     
     levelSamples <- lapply(1:N, function(x, y, z){
       
-      return(list2matrix(y[(1+((x-1)*z)):(z*x)]))
+      #return(list2matrix(y[(1+((x-1)*z)):(z*x)]))
+      return(list2matrix(y[,x]))
       
     }, list2matrix(getAllFieldFromList(currentLevel, "representant", 2)), C)
     
@@ -361,7 +362,8 @@ fitNodeOfTrees <- function(node, otherErrors){
   }
   
   #node[["classifier"]] <- boosting(Y~., data, FALSE, N, control = rpart.control(minsplit = 2, maxdepth = N))
-  node[["classifier"]] <- svm(formula = Y~., data = data, kernel="radial", type = "C-classification")
+  node[["classifier"]] <- rpart(Y~., data, control = rpart.control(minsplit = 2, maxdepth = N))
+  #node[["classifier"]] <- svm(formula = Y~., data = data, kernel="radial", type = "C-classification")
   
   return(node)
 }
@@ -439,7 +441,8 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
       #representants <- list2matrix(getAllFieldFromList(branch, "representant", 2))
       representants <- lapply(1:N, function(x, y, z){
         
-        return(list2matrix(y[(1+((x-1)*z)):(z*x)]))
+        #return(list2matrix(y[(1+((x-1)*z)):(z*x)]))
+        return(list2matrix(y[,x]))
         
       }, list2matrix(getAllFieldFromList(branch, "representant", 2)), Nnodes)
       
@@ -451,7 +454,8 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
       
       maxErrors <- lapply(1:N, function(x, y, z){
         
-        return(list2matrix(y[(1+((x-1)*z)):(z*x)]))
+        #return(list2matrix(y[(1+((x-1)*z)):(z*x)]))
+        return(list2matrix(y[,x]))
         
       }, list2matrix(getAllFieldFromList(branch, "maxError", 2)), Nnodes)
       
@@ -473,7 +477,7 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
           targets <- getAllFieldFromList(icpResults, "target", 2)
           
           
-          okError <- okError & (errors[,i] < maxErrors[[i]])
+          #okError <- okError & (errors[,i] < maxErrors[[i]])
         }
         else{
           #computes the error with the single first level's representant
@@ -483,26 +487,29 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
           errors[,i] <- icpResults$error
           #maxError <- branch[[1]]$maxError
           
-          okError <- okError & (errors[,i] < maxError[[i]])
+          #okError <- okError & (errors[,i] < maxError[[i]])
         }
       }
       
-      classificationResult <- mapply(function(x){
+      #classificationResult <- mapply(function(x){
         
-        return(attr(predict(branch[[x]][["classifier"]], errors[x,], decision.values=TRUE), "decision.values"))
+        #return(attr(predict(branch[[x]][["classifier"]], errors[x,], decision.values=TRUE), "decision.values"))
+        #return(median(as.numeric(errors[x,])))
         
-      }, 1:Nnodes)
+      #}, 1:Nnodes)
       
-      passed <- which((classificationResult > 0) & okError)
+      passed <- makeDecision(errors, 10)
       
-      rmByError <- which(!okError)
-      rmByClassf <- which(classificationResult < 0)
+      #passed <- which((classificationResult > 0) & okError)
       
-      if(length(rmByError) > 0)
-        cat(" [Removed by maxError: ", rmByError, "]", file = logFile, append=TRUE)
+      #rmByError <- which(!okError)
+      #rmByClassf <- which(classificationResult < 0)
       
-      if(length(rmByClassf) > 0)
-        cat(" [Removed by classifier: ", rmByClassf, "]", file=logFile, append=TRUE)
+      #if(length(rmByError) > 0)
+      #  cat(" [Removed by maxError: ", rmByError, "]", file = logFile, append=TRUE)
+      
+      #if(length(rmByClassf) > 0)
+      #  cat(" [Removed by classifier: ", rmByClassf, "]", file=logFile, append=TRUE)
       
       comparisons <- comparisons + Nnodes
       
@@ -554,7 +561,8 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
           #}, test)
           
           #gets the minimum computed error
-          minError <- classificationResult[v]
+          #minError <- classificationResult[v]
+          minError <- median(as.numeric(errors[passed,]))
           
           #cat(" -------", minErrorIndex, "------", file=logFile, append=TRUE)
           cat(" E =", minError, "\n", file=logFile, append=TRUE)
@@ -603,6 +611,7 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
     if(length(votes) > 1){
       
       result <- votes[which.min(votes[,2]),]
+      #result <- votes[which.max(votes[,2]),]
       #checks the result
       if(paste("0", as.character(result[1]), sep="") == classes$fileClasses[m]){
         
@@ -624,4 +633,55 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
   }
   
   cat("--------Accuracy:", corrects/M*100, "----------\n", file=logFile, append=TRUE)
+}
+
+print.hierarchicalModel <- function(model, file=""){
+  
+  N <- length(model)
+  
+  cat("", file=file, append=FALSE)
+  print.hierarchicalModelAux(model, 1, file)
+}
+
+print.hierarchicalModelAux <- function(model, level, file){
+  
+  N <- length(model)
+  
+  for(i in 1:N){
+    
+    if(!is.null(names(model)[i]))
+      cat("\n", concatenate(rep("\t", level)), ">", names(model)[i], file=file, append=TRUE)
+    else
+      cat("\n", concatenate(rep("\t", level)), ">", i, file=file, append=TRUE)
+    
+    if(!is.null(model[[i]]$children))
+      print.hierarchicalModelAux(model[[i]]$children, level + 1, file)
+    
+    #cat("\n", concatenate(rep("\t", level)), ")", file=file, append=TRUE)
+  }
+}
+
+makeDecision <- function(results, K=2){
+  
+  medians <- apply(results, 1, median)
+  
+  sortedIndex <- sort(medians, index.return = TRUE, decreasing = FALSE)[["ix"]][1:K]
+  
+  N <- length(results[1,])
+  
+  Y <- mapply(function(x){
+    
+    return(which.min(results[sortedIndex,x]))
+    
+  }, 1:N)
+  
+  counts <- mapply(function(x){
+    
+    return(length(which(Y == x)))
+    
+  }, 1:K)
+  
+  decision = sortedIndex[which.max(counts)]
+  
+  return(decision)
 }
