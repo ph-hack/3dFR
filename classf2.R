@@ -1,6 +1,6 @@
 library(adabag)
 
-hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupNumbers=c(7,3),
+hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupNumbers=c(7,3), maxError=1.15,
                                                features=c(1:11), errorParams=list(range=20, smooth=5, tol=10)){
   
   if(length(training) == 0)
@@ -30,17 +30,15 @@ hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupN
   }
   
   #creates the first C nodes, where C = number of classes
-  currentLevel <- computeNodes(samples, classes$fileClasses, features, errorParams = errorParams, progress=TRUE)
-  
-  fittingResults <- fitWholeLevel(currentLevel, errorParams, TRUE)
+  currentLevel <- computeNodes(samples, classes$fileClasses, features, errorParams = errorParams,
+                               maxErrorFactor = maxError, progress=TRUE)
   
   nGroups <- length(groupNumbers)
   
   for(g in groupNumbers){
     
     #divides the leafs into groups
-    gResult <- computeGrouping(fittingResults, g, progress=TRUE)
-    currentLevel <- gResult$level
+    gResult <- computeGrouping(currentLevel, g, N, progress=TRUE)
     #mounts the first level
     
     levelSamples <- lapply(1:N, function(x, y, z){
@@ -52,13 +50,11 @@ hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupN
     
     
     
-    currentLevel <- computeNodes(levelSamples, gResult$groups, features, currentLevel, errorParams,TRUE)
-    
-    fittingResults <- fitWholeLevel(currentLevel, errorParams, TRUE)
+    currentLevel <- computeNodes(levelSamples, gResult$groups, features, currentLevel, errorParams, maxError, TRUE)
     
   }
   
-  model <- fittingResults$nodes
+  model <- currentLevel
   
   return(model)
 }
@@ -144,11 +140,8 @@ computeNodes <- function(samples, groups, features=1:11, children=0, errorParams
   return(levels)
 }
 
-computeGrouping <- function(nodesAndErrorMatrix, nGroups=0, threshold=0, progress=FALSE){
-  
-  nodes <- nodesAndErrorMatrix$nodes
-  errorMatrix <- nodesAndErrorMatrix$similarityMatrix
-  
+computeGrouping <- function(nodes, nGroups=0, features=9, threshold=0, errorParams=list(range=20, smooth=5, tol=10), progress=FALSE){
+    
   C <- length(nodes)
   
   #determine the maximum number of groups for the level 1
@@ -160,45 +153,42 @@ computeGrouping <- function(nodesAndErrorMatrix, nGroups=0, threshold=0, progres
     threshold <- C/nGroups
   
   #initiates the similarity matrix
-  similarityMatrix <- matrix(rep(0, C*C), nrow=C)
+  similarityMatrix <- list()
   n <- computeNumberOfCombinations(C, 2)
   if(progress)
     cat(n, " combinations\n")
   m <- 1
-  features <- length(errorMatrix)
   
   #computes the similarity matrix with the C representants
-  for(j in 1:(C-1)){
-    for(k in (j+1):C){
-      
-      data <- mapply(function(x){
+  for(f in 1:features){
+    
+    similarityMatrix[[f]] <- matrix(rep(0, C*C), nrow=C)
+    
+    for(j in 1:(C-1)){
+      for(k in (j+1):C){
         
-        return(errorMatrix[[x]][j,k])
+        similarityMatrix[[f]][j,k] <- do.call(my.dtwBasedDistance2, merge.list(list(nodes[[j]][["representant"]][[f]],
+                                                                                    nodes[[k]][["representant"]][[f]]), errorParams))$error
+        similarityMatrix[[f]][k,j] <- similarityMatrix[[f]][j,k]
         
-      }, 1:features)
-      
-      data <- data.frame(matrix(data, nrow=1))
-      
-      similarityMatrix[j,k] <- attr(predict(nodes[[j]][["classifier"]], data, decision.values=TRUE), "decision.values")
-       
-      similarityMatrix[k,j] <- similarityMatrix[j,k]
-      
-      if(progress){
-        cat("computing similarity:", m*100/n, "%\n")
-        m <- m + 1
+        if(progress){
+          cat("computing similarity:", m*100/n, "%\n")
+          m <- m + 1
+        }
       }
     }
   }
   
   #Transforming the values in the similarityMatrix so it will lie in the interval [0..inf]
-  zeros <- which(similarityMatrix == 0)
-  similarityMatrix[zeros] <- max(similarityMatrix) + 1
-  similarityMatrix <- (similarityMatrix * -1) + min(similarityMatrix)
+  #zeros <- which(similarityMatrix == 0)
+  #similarityMatrix[zeros] <- max(similarityMatrix) + 1
+  #similarityMatrix <- (similarityMatrix * -1) + min(similarityMatrix)
   
   #print(similarityMatrix)
   #computes the rank of similarity for the whole matrix
-  similarityMatrix <- t(apply(similarityMatrix, 1, rank, ties.method = "random"))
-  similarityMatrix <- similarityMatrix - 1
+  #similarityMatrix <- t(apply(similarityMatrix, 1, rank, ties.method = "random"))
+  #similarityMatrix <- similarityMatrix - 1
+  similarityMatrix <- getRankedMatrix(similarityMatrix)
   #computes the similarity index instead of the ranking
   for(j in 1:(C-1)){
     for(k in (j+1):C){
@@ -369,7 +359,7 @@ fitNodeOfTrees <- function(node, otherErrors){
 }
 
 hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=character(0), subset=integer(0), logFile="",
-                                                errorParams=list(range=20, smooth=5, tol=10), isToPlot=FALSE){
+                                                errorParams=list(range=20, smooth=5, tol=10), maxErrorFactor=0.5, isToPlot=FALSE){
   
   #gets the files' names
   if(length(testing) == 0)
@@ -498,7 +488,40 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
         
       #}, 1:Nnodes)
       
+      #Applies maxError filter
+#       filteredErrors <- mapply(function(x){
+#         
+#         bigger <- mapply(function(f){
+#           
+#           return(errors[x,f] > maxErrors[[f]][x])
+#           
+#         }, 1:N)
+#         
+#         return(length(which(bigger)) > ceiling(N/2))
+#         
+#       }, 1:Nnodes)
+#       
+#       filteredErrors <- which(filteredErrors)
+#       
+#       if(length(filteredErrors) > 0)
+#         cat(" [Removed by maxError: ", filteredErrors, "]", file = logFile, append=TRUE)
+#       
+#       
+#       errors[filteredErrors,] <- errors[filteredErrors,] * 1000
       passed <- makeDecision(errors, 10)
+
+      bigger <- mapply(function(f){
+        
+        return(errors[passed,f] > maxErrors[[f]][passed])
+        
+      }, 1:N)
+      bigger <- which(bigger)
+
+      if(length(bigger) >= ceiling(N/2)){
+        
+        cat(" Removed by max error: ", passed, file = logFile, append=TRUE)
+        passed <- c()
+      }
       
       #passed <- which((classificationResult > 0) & okError)
       
@@ -684,4 +707,55 @@ makeDecision <- function(results, K=2){
   decision = sortedIndex[which.max(counts)]
   
   return(decision)
+}
+
+vectorDifference <- function(v1, v2){
+  
+  N <- min(length(v1), length(v2))
+  
+  d <- mapply(function(x,y){
+    
+    return(abs(x - y))
+    
+  }, v1, v2)
+  
+  return(median(d))
+  #return(mean(d))
+}
+
+getRankedMatrix <- function(similarityMatrix, progress=FALSE){
+  
+  C <- length(similarityMatrix[[1]][1,])
+  
+  features <- length(similarityMatrix)
+  
+  rankedMatrix <- matrix(rep(0, C^2), ncol=C)
+  
+  for(j in 1:C){
+      
+    errors <- mapply(function(f){
+      
+      return(similarityMatrix[[f]][j,])
+      
+    }, 1:features)
+    
+    ranking <- 0
+    
+    for(k in 1:C){
+      
+      d <- makeDecision(errors, C)
+      
+      rankedMatrix[j,d] <- ranking
+      ranking <- ranking + 1
+      
+      errors[d,] <- rep(100,features)
+    }
+    
+    if(progress){
+      cat("computing similarity:", m*100/n, "%\n")
+      m <- m + 1
+    }
+  }
+  
+  return(rankedMatrix)
 }
