@@ -85,7 +85,12 @@ AND <- function(x){
 # Computes the cosine distance between two vectors ----
 cosineDist <- function(v1, v2){
   
-  return(sum(v1 * v2)/(sqrt(sum(v1^2)) * sqrt(sum(v2^2))))
+  return(1 - sum(v1 * v2)/(sqrt(sum(v1^2)) * sqrt(sum(v2^2))))
+}
+
+euclidianDist <- function(v1, v2){
+  
+  return(sqrt(sum((v1-v2)^2)))
 }
 
 # Retrieves all values of a given field of a list in a given level ----
@@ -554,4 +559,61 @@ removeNullFromList <- function(L, returnVector=FALSE){
 meanOfInterval <- function(X){
   
   return((max(X) + min(X))/2)
+}
+
+#Generates a data matrix randomically, with M samples of N variables ----
+dataGenerator <- function(M, N, range=c(0:100)/100, replace=TRUE){
+  
+  return(matrix(sample(range, M*N, replace = replace), ncol=N))
+}
+
+#Computes the smallest angle between two line segments ----
+angleBetweenSegments <- function(l1, l2){
+  
+  l1[[2]][1] <- l1[[2]][1] - l1[[1]][1]
+  l1[[2]][2] <- l1[[2]][2] - l1[[1]][2]
+  l1[[1]][1] <- 0
+  l1[[1]][2] <- 0
+  
+  l2[[2]][1] <- l2[[2]][1] - l2[[1]][1]
+  l2[[2]][2] <- l2[[2]][2] - l2[[1]][2]
+  l2[[1]][1] <- 0
+  l2[[1]][2] <- 0
+  
+  a1 <- 0
+  a2 <- 0
+  if(abs(l1[[2]][2]) != 0){
+    a1 <- l1[[2]][1]/l1[[2]][2]
+    l1[[2]][2] <- l1[[2]][2]/abs(l1[[2]][2]) * sqrt(1/(a1^2 + 1))
+  }
+  else{
+    a1 <- l1[[2]][1]/0.0001
+    l1[[2]][2] <- sqrt(1/(a1^2 + 1))
+  }
+  
+  if(abs(l2[[2]][2]) != 0){
+    a2 <- l2[[2]][1]/l2[[2]][2]
+    l2[[2]][2] <- l2[[2]][2]/abs(l2[[2]][2]) * sqrt(1/(a2^2 + 1))
+  }
+  else{
+    a2 <- l2[[2]][1]/0.0001
+    l2[[2]][2] <- sqrt(1/(a2^2 + 1))
+  }
+  
+  l1[[2]][1] <- a1 * l1[[2]][2]
+  l2[[2]][1] <- a2 * l2[[2]][2]
+  
+  c <- l1[[2]][1] * l2[[2]][1] + l1[[2]][2] * l2[[2]][2]
+  res <- acos(c)
+  
+  p2 <- rotateCurve(matrix(l1[[2]], ncol=2), 0, res)
+  p3 <- rotateCurve(matrix(l1[[2]], ncol=2), 0, -res)
+  
+  if(sqrt((p2[1] - l2[[2]][1])^2 + (p2[2] - l2[[2]][2])^2) > sqrt((p3[1] - l2[[2]][1])^2 + (p3[2] - l2[[2]][2])^2))
+    res <- -res
+  
+  if(is.nan(res))
+    cat("NAN!", c, "v1 =", l1[[2]], "v2 =", l2[[2]], "\n")
+  
+  return(res)
 }

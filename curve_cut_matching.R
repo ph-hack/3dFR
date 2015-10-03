@@ -1,3 +1,196 @@
+# The RANSAC algorithm -----
+# This function returns the ouliers indexes of the data, given a representation
+# and a metric function.
+# Input:
+#  data = matrix data/list, each row/item is a observation, each column is a variable/descriptor
+#  representation = a function that maps the data to the representation to be used
+#  metric = a function that compares two observations mapped with 'representation'
+#  threshold = the error threshold to be considered as part of the consensus
+#  cr = the consensus ratio, i.e. the ratio of observations belonging to the consensus
+#       so the algorithm is considered as converged
+ransac <- function(data, model, metric, representation, threshold=0.05, cr=0.9, standardize=FALSE, 
+                   minInitialSamples=2, maxIter=10){
+  
+  M <- length(data)
+  
+  #maps the data to the representation
+  mData <- lapply(data, representation)
+  
+  #Initiates the loops
+  iter <- 1
+  consensus <- sample(1:M, minInitialSamples)
+  curConsensus <- 0
+  #it must stops whether the cr is matched or the maximum number of iterations
+  #is reached
+  while(length(consensus)/M < cr && iter <= maxIter){
+    
+    #picks the minimal initial samples
+    initSamples <- mData[consensus]
+    
+    #builds the model
+    m <- model(initSamples)
+    
+    #standardizes the representation values
+    if(standardize){
+      
+      cat("Standarization not implemented!!!\n")
+    }  
+    
+    #Computes the error of the samples
+    dists <- mapply(metric, mData, MoreArgs = list(p2=m))
+    #Finds the consensus set using the threshold
+    curConsensus <- which(dists < threshold)
+    
+    if(length(curConsensus) > length(consensus))
+      consensus <- curConsensus
+    
+    #prints loop entering conditions
+    cat("consensus:", length(consensus), "CR:", length(consensus)/M, "iter:", iter, "error:", mean(dists), min(dists), "\n")
+    
+    iter <- iter + 1
+  }
+  
+  #All samples that does not belong to the consensus set is an outlier
+  #returns their indexes
+  return(consensus)
+}
+
+#Plots a list of pairs of matches ----
+plotMatchPairs <- function(matchPairs, range=c(0,100)){
+  
+  plot(range, range, col="white")
+  
+  M <- length(matchPairs)
+  
+  for(pair in matchPairs){
+    
+    points(pair[[1]][1], pair[[1]][2], col="blue")
+    points(pair[[2]][1], pair[[2]][2], col="blue")
+    points(pair[[1]][3], pair[[1]][4], col="red")
+    points(pair[[2]][3], pair[[2]][4],col="red")
+    
+    lines(pair[[1]][c(1,3)], pair[[1]][c(2,4)], col="gray")
+    lines(pair[[2]][c(1,3)], pair[[2]][c(2,4)], col="gray")
+    
+    lines(c(pair[[1]][1], pair[[2]][1]), c(pair[[1]][2], pair[[2]][2]), col="blue")
+    lines(c(pair[[1]][3], pair[[2]][3]), c(pair[[1]][4], pair[[2]][4]), col="red")
+  }
+}
+
+#Fits a model for the geometric transformation of match pairs ----
+geoTransformModel <- function(data){
+  
+  M <- length(data)
+  
+  return(data[[sample(1:M, 1)]])
+}
+
+# Estimates the geometric transformations of a pair of matching points ----
+linearGeoTransform <- function(matchPair){
+  
+  p11 <- matchPair[[which.min(c(sum(matchPair[[1]][1:2]), sum(matchPair[[2]][1:2])))]][1:2]
+  p12 <- matchPair[[which.max(c(sum(matchPair[[1]][1:2]), sum(matchPair[[2]][1:2])))]][1:2]
+  p21 <- matchPair[[which.min(c(sum(matchPair[[1]][1:2]), sum(matchPair[[2]][1:2])))]][3:4]
+  p22 <- matchPair[[which.max(c(sum(matchPair[[1]][1:2]), sum(matchPair[[2]][1:2])))]][3:4]
+  
+  res = list(scale=0, translation=c(0,0), rotation=0)
+  
+  res$rotation = angleBetweenSegments(list(p11,p12), list(p21, p22))
+  
+  res$translation[1] = p11[1] - p21[1]
+  res$translation[2] = p11[2] - p21[2]
+  
+  res$scale = sqrt((p11[1] - p12[1])^2 + (p11[2] - p12[2])^2)/sqrt((p21[1] - p22[1])^2 + (p21[2] - p22[2])^2)
+    
+  return(res)
+}
+
+# GeoTransformation-based metric function ----
+geoTransformDistance <- function(p1, p2){
+  
+  scaleDif = p1$scale - p2$scale
+  rotationDif = p1$rotation - p2$rotation
+  translationDif = ((p1$translation[1] - p2$translation[1])^2 + (p1$translation[2] - p2$translation[2])^2)/10
+  
+  return(sqrt(scaleDif^2 + rotationDif^2))
+}
+
+#Computes the matches given a distance function to be used ----
+computeMatches <- function(rawdata, distance=my.cosineDistance){
+  
+  M <- length(rawdata[,1])
+  distMatrix <- matrix(rep(0, M*M), ncol=M)
+  
+  for(i in 1:(M-1)){
+    
+    distMatrix[i,i:M] <- apply(rawdata[i:M,], 1, function(x, y){
+      
+      return(distance(x,y)$error)
+      
+    }, rawdata[i,])
+    
+    distMatrix[i:M,i] <- t(distMatrix[i,i:M])
+  }
+  
+  distMatrix[1 + (0:(M-1))*(M+1)] <- max(distMatrix) + 1
+  
+  closest <- apply(distMatrix, 1, which.min)
+  
+  queue <- 1:M
+  matches <- list()
+  
+  while(length(queue) > 0){
+    
+    i = queue[1]
+    queue = queue[-1]
+    
+    x = closest[i]
+    
+    if(closest[x] == i){
+      
+      matches[[length(matches) + 1]] <- c(i,x)
+      queue = queue[-which(queue == x)]
+    }
+  }
+  
+  return(matches)
+}
+
+#Puts the matched points in the same row ----
+concatMatches <- function(data, matches){
+  
+  N = length(data[1,])
+  
+  newData = matrix(rep(0,2*N), ncol=2*N)
+  
+  for(m in matches){
+    
+    newData <- rbind(newData, matrix(c(data[m[1],], data[m[2],]), ncol=2*N))
+  }
+  
+  return(newData[-1,])
+}
+
+#Computes the combinations of pairs of matches ----
+computeMatchesPairs <- function(matchesData){
+  
+  M <- length(matchesData[,1])
+  
+  matchesPairs <- list()
+  k <- 1
+  
+  for(i in 1:(M-1)){
+    for(j in (i+1):M){
+      
+      matchesPairs[[k]] <- list('1' = matchesData[i,], '2' = matchesData[j,])
+      k <- k + 1
+    }
+  }
+  
+  return(matchesPairs)
+}
+
+# The DTW-based distance function ----
 my.dtwBasedDistance2 <- function(reference, target, smooth=0, range=0, threshold=0, tol=5, useTolAsWeight=0){
   
   M <- length(reference)
@@ -463,6 +656,7 @@ my.dtwBasedDistance <- function(reference, target, smooth=0, W=0, range=0, thres
   }
 }
 
+# The Gradient-based distance function ----
 my.gradDistance <- function(x1, x2, C1, C2, range=0){
   
   #g1 <- gradient(C1, FALSE)

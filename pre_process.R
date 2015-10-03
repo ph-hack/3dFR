@@ -2908,6 +2908,72 @@ abs2matrix <- function(file){
   (m)
 }
 
+matrix2image2 <- function(points, file="", dx=0, dy=0, col=640, row=480, thStepSize=2, nClosest=3, maxIter=4){
+  
+  #finds the min and max values of both axis (X and Y)
+  minXd <- min(points[,1])
+  maxXd <- max(points[,1])
+  minYd <- min(points[,2])
+  maxYd <- max(points[,2])
+  minZd <- min(points[,3])
+  maxZd <- max(points[,3])
+  
+  #finds the variation in both axis (X and Y), delta_X and delta_Y
+  if(dx == 0)
+    dx <- (maxXd - minXd)/col
+  if(dy == 0)
+    dy <- (maxYd - minYd)/row
+  
+  m <- length(points[,1])
+  
+  #instantiates the img matrix and fills it with 0s
+  img <- matrix(rep(0, col * row), ncol=row)
+  
+  for(i in 1:row){
+    for(j in 1:col){
+      
+      x <- j * dx + minXd
+      y <- i * dy + minYd
+      
+      candidates <- c()
+      th <- ((maxXd - minXd)*(maxYd - minYd))/m
+      
+      iter <- 1
+      
+      while(length(candidates) == 0 && iter <= maxIter){
+        candidates <- which(abs(points[,1] - x) <= th & abs(points[,2] - y) <= th)
+        th <- th^thStepSize + 2*th
+        iter <- iter + 1
+      }
+      
+      if(length(candidates) == 0){
+        
+        img[j,i] <- 0 #minZd - 1
+      }
+      else{
+        dists <- as.matrix(dist(matrix(c(x,points[candidates,1], y, points[candidates,2]), ncol=2)))[1,-1]
+        
+        n <- min(nClosest, length(candidates))
+        chosen <- sort.int(dists, index.return = TRUE)$ix[1:n]
+        
+        img[j,i] <- mean(points[candidates[chosen],3]) - minZd + 1
+      }
+    }
+    
+    cat(i * 100/row, "%\n")
+  }
+  
+  if(file != ""){
+    write(img, paste(file, ".jpg.dat", sep=""), ncolumns=col)
+    img <- t(img)
+    my.writeJPEG(img, paste(file, ".jpg", sep=""), quality=1)
+  }
+  else
+    img <- t(img)
+  
+  return(img)
+}
+
 #converts the matrix of 3d points into a range image.
 #inputs:
 #   m = the 3d point matrix

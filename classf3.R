@@ -1,33 +1,16 @@
 library(adabag)
 
-hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupNumbers=c(7,3), maxError=1.15,
-                                               features=c(1:11), errorParams=list(range=20, smooth=5, tol=10)){
-  
-  if(length(training) == 0)
-    training <- dir(trainingDir)
-  
+hierarchicalFeatureBasedClassifier <- function(data, training, groupNumbers=c(7,3), maxError=1.15,
+                                               features=c(1:11), errorParams=list(range=20, tol=10)){
+    
   #retrieves the classes information
   classes <- getClassFromFiles(files=training)
-  
-  descriptors <- lapply(concatenate(list(trainingDir, training)), readMainLines, "list")
   
   N <- length(features) #descriptors[[1]])
   C <- length(classes$classes)
   
   model <- list()
-  samples <- list()
-  
-  for(i in features){
-    #separates only the vectors for the ith descriptors
-    samples[[i]] <- getAllFieldFromList(descriptors, i, 2)
-    #puts them into a matrix
-    samples[[i]] <- list2matrix(samples[[i]])
-    
-    if(i < 4){
-      
-      samples[[i]] <- samples[[i]][,1:100]
-    }
-  }
+  samples <- data
   
   #creates the first C nodes, where C = number of classes
   currentLevel <- computeNodes(samples, classes$fileClasses, features, errorParams = errorParams,
@@ -48,10 +31,7 @@ hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupN
       
     }, list2matrix(getAllFieldFromList(currentLevel, "representant", 2)), C)
     
-    
-    
     currentLevel <- computeNodes(levelSamples, gResult$groups, features, currentLevel, errorParams, maxError, TRUE)
-    
   }
   
   model <- currentLevel
@@ -59,7 +39,7 @@ hierarchicalFeatureBasedClassifier <- function(trainingDir, training=c(), groupN
   return(model)
 }
 
-computeNodes <- function(samples, groups, features=1:11, children=0, errorParams=list(range=20, smooth=5, tol=10), maxErrorFactor=1.15, progress=FALSE){
+computeNodes <- function(samples, groups, features=1:11, children=0, errorParams=list(range=20, tol=10), maxErrorFactor=1.15, progress=FALSE){
   
   g <- unique(groups)
   G <- length(g)
@@ -104,7 +84,7 @@ computeNodes <- function(samples, groups, features=1:11, children=0, errorParams
         #compute the mean error and the mean error kind
         icpResults <- apply(thisClassSamples[[i]], 1, function(target, reference){
           
-          return (do.call(my.dtwBasedDistance2, merge.list(list(reference, curveCorrection3(target, reference, 1)), errorParams)))
+          return (do.call(my.dtwBasedDistance2, merge.list(list(reference, target), errorParams)))
           
         }, meanClassSample)
         
@@ -141,7 +121,7 @@ computeNodes <- function(samples, groups, features=1:11, children=0, errorParams
 }
 
 computeGrouping <- function(nodes, nGroups=0, features=9, threshold=0, errorParams=list(range=20, smooth=5, tol=10), progress=FALSE){
-    
+  
   C <- length(nodes)
   
   #determine the maximum number of groups for the level 1
@@ -289,7 +269,7 @@ fitWholeLevel <- function(nodes, errorParams=list(range=20, smooth=5, tol=10), p
       for(k in (j+1):C){
         
         similarityMatrix[[f]][j,k] <- do.call(my.dtwBasedDistance2, merge.list(list(nodes[[j]][["representant"]][[f]],
-                                                                        nodes[[k]][["representant"]][[f]]), errorParams))$error
+                                                                                    nodes[[k]][["representant"]][[f]]), errorParams))$error
         similarityMatrix[[f]][k,j] <- similarityMatrix[[f]][j,k]
         
         if(progress){
@@ -358,13 +338,8 @@ fitNodeOfTrees <- function(node, otherErrors){
   return(node)
 }
 
-hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=character(0), subset=integer(0), logFile="",
-                                                errorParams=list(range=20, smooth=5, tol=10), maxErrorFactor=0.5,
-                                                medianThreshold=10, isToPlot=FALSE){
-  
-  #gets the files' names
-  if(length(testing) == 0)
-    testing <- dir(testDir)
+hierarchicalFeatureBasedPrediction3 <- function(model, data, testing=character(0), subset=integer(0), logFile="",
+                                                errorParams=list(range=20, tol=10), maxErrorFactor=0.5, isToPlot=FALSE){
   
   if(length(subset) > 0)
     testing <- testing[subset]
@@ -372,31 +347,12 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
   #retrieves the classes information
   classes <- getClassFromFiles(files=testing)
   
-  #gets the descriptors' values for all test samples
-  descriptors <- lapply(concatenate(list(testDir, testing)), readMainLines, "list")
-  
   #the number of testing sample
   M <- length(testing)
   #the number of models, one for each descriptor
   N <- length(model[[1]][["errors"]])
   
-  tests <- list()
-  
-  #for each descriptor, ...
-  for(i in 1:N){
-    
-    #separates only the vectors for the ith descriptor
-    samples <- getAllFieldFromList(descriptors, i, 2)
-    #puts them into a matrix
-    samples <- list2matrix(samples)
-    #puts this matrix into tests list
-    if(i < 4){
-      tests[[i]] <- samples[,1:100]
-      dim(tests[[i]]) <- c(length(tests[[i]])/100,100)
-    }
-    else
-      tests[[i]] <- samples
-  }
+  tests <- data
   
   corrects <- 0
   
@@ -413,12 +369,11 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
     
     #initializes the votes as a matrix with zeros (these zeros will be ignored later)
     votes <- matrix(c(0,0), nrow=1)
-    chosenErrors <-data.frame(matrix(nrow=1,ncol=N))
     
     levelIndex <- list(c(0, 1))
     
     levelQueue <- list(model)
-        
+    
     #for each node from second level which matched the test, ...
     while(length(levelQueue) > 0){
       
@@ -444,17 +399,14 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
       okError <- rep(TRUE, Nnodes)
       passed <- c(1:(Nnodes))
       
-      maxErrors <- mapply(function(x){
+      #maxErrors <- lapply(1:N, function(x, y, z){
         
-        return(list2vector(x))
+        #return(list2matrix(y[(1+((x-1)*z)):(z*x)]))
+        #return(list2matrix(y[,x]))
         
-      }, getAllFieldFromList(branch, "maxError", 2))
+      #}, list2matrix(getAllFieldFromList(branch, "maxError", 2)), Nnodes)
       
-      maxErrors <- t(maxErrors)
-      
-      #maxErrors <- matrix(nrow=Nnodes, ncol=N)
-      #maxErrors <- list2matrix(getAllFieldFromList(branch, "maxError", 2))
-      #maxErrors <- getAllFieldFromList(branch, "maxError", 2)
+      maxErrors <- list2matrix(list2matrix(getAllFieldFromList(branch, "maxError", 2)))
       
       for(i in 1:N){
         
@@ -465,7 +417,7 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
           #computes the errors for the first level
           icpResults <- apply(representants[[i]], 1, function(reference, target){
             
-            return (do.call(my.dtwBasedDistance2, merge.list(list(reference, curveCorrection3(target, reference, 1)), errorParams)))
+            return (do.call(my.dtwBasedDistance2, merge.list(list(reference,target), errorParams)))
             #return (dtw(reference, curveCorrection3(target, reference, 1)))
             
           }, test)
@@ -473,15 +425,15 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
           errors[,i] <- list2vector(getAllFieldFromList(icpResults, "error", 2))
           targets <- getAllFieldFromList(icpResults, "target", 2)
           
+          
           #okError <- okError & (errors[,i] < maxErrors[[i]])
         }
         else{
           #computes the error with the single first level's representant
-          icpResults <- do.call(my.dtwBasedDistance2, merge.list(list(representants[[i]], curveCorrection3(test, representants[[i]], 1)), errorParams))
+          icpResults <- do.call(my.dtwBasedDistance2, merge.list(list(representants[[i]], test), errorParams))
           #icpResults <- dtw(representants, curveCorrection3(test, representants, 1))
           targets <- list(icpResults$target)
           errors[,i] <- icpResults$error
-          maxErrors[,i] <- list2matrix(getAllFieldFromList(branch, "maxError", 2))
           #maxError <- branch[[1]]$maxError
           
           #okError <- okError & (errors[,i] < maxError[[i]])
@@ -489,29 +441,46 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
       }
       
       #classificationResult <- mapply(function(x){
-        
-        #return(attr(predict(branch[[x]][["classifier"]], errors[x,], decision.values=TRUE), "decision.values"))
-        #return(median(as.numeric(errors[x,])))
-        
+      
+      #return(attr(predict(branch[[x]][["classifier"]], errors[x,], decision.values=TRUE), "decision.values"))
+      #return(median(as.numeric(errors[x,])))
+      
       #}, 1:Nnodes)
       
       #Applies maxError filter
-      biggers <- mapply(function(x){
-        
-        if(length(which(errors[x,] > maxErrors[x,])) > ceiling(N/2))
-          return(TRUE)
-        else
-          return(FALSE)
-        
-      }, 1:Nnodes)
+      #       filteredErrors <- mapply(function(x){
+      #         
+      #         bigger <- mapply(function(f){
+      #           
+      #           return(errors[x,f] > maxErrors[[f]][x])
+      #           
+      #         }, 1:N)
+      #         
+      #         return(length(which(bigger)) > ceiling(N/2))
+      #         
+      #       }, 1:Nnodes)
+      #       
+      #       filteredErrors <- which(filteredErrors)
+      #       
+      #       if(length(filteredErrors) > 0)
+      #         cat(" [Removed by maxError: ", filteredErrors, "]", file = logFile, append=TRUE)
+      #       
+      #       
+      #       errors[filteredErrors,] <- errors[filteredErrors,] * 1000
+      passed <- makeDecision(errors, maxErrors, 10)
       
-      #passed <- makeDecision(errors, medianThreshold)
-      passed <- which(!biggers)
-
-      if(length(which(biggers)) >= 1){
-        
-        cat(" Removed by max error: ", which(biggers), file = logFile, append=TRUE)
-      }
+#       bigger <- mapply(function(f){
+#         
+#         return(errors[passed,f] > maxErrors[[f]][passed])
+#         
+#       }, 1:N)
+#       bigger <- which(bigger)
+#       
+#       if(length(bigger) >= ceiling(N/2)){
+#         
+#         cat(" Removed by max error: ", passed, file = logFile, append=TRUE)
+#         passed <- c()
+#       }
       
       #passed <- which((classificationResult > 0) & okError)
       
@@ -529,33 +498,33 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
       #if this is a leaf, ...
       if(is.null(branch[[1]]$children)){
         
-#         for(v in 1:(length(branch))){
-#           if(isToPlot && length(passed) == 0 && names(branch)[v] == classes$fileClasses[m]){
-#             
-#             ymax = max(c(branch[[v]]$errorRange[,3], dists[[v]][,2]))
-#             ymin = min(c(branch[[v]]$errorRange[,2], dists[[v]][,2]))
-#             xmax = max(branch[[v]]$errorRange[,1], dists[[v]][,1])
-#             xmin = min(branch[[v]]$errorRange[,1], dists[[v]][,1])
-#             
-#             #plots the error range graph
-#             plot(c(1,xmax), c(ymin, ymax), col="white", main=concatenate(c("Error Range predictor ", f, ", ", i)))
-#             lines(c(1,xmax), c(0,0), col="gray")
-#             sorted <- sort.int(branch[[v]]$errorRange[,1], index.return = TRUE)$ix
-#             meanRange = rowMeans(branch[[v]]$errorRange[(sorted),-1])
-#             lines(x = branch[[v]]$errorRange[sorted,1], y = meanRange, col="green")
-#             lines(x = branch[[v]]$errorRange[sorted,1], y = branch[[v]]$errorRange[sorted,2], col="red")
-#             lines(x = branch[[v]]$errorRange[sorted,1], y = branch[[v]]$errorRange[sorted,3], col="red")
-#             lines(dists[[v]], col="black")
-#             
-#             plot(branch[[v]]$representant, type="l", col="red", main=concatenate(c("Curves predictor ", f, ", ", i)))
-#             lines(test, col="blue")
-#             lines(x = targets[[v]][,1], y = targets[[v]][,2], col="black")
-#             if(f == 1){
-#               points(refPoints[[v]], branch[[v]]$representant[refPoints[[v]]], col="red")
-#               points(targets[[v]][tarPoints[[v]],], col="black")
-#             }
-#           }
-#         }
+        #         for(v in 1:(length(branch))){
+        #           if(isToPlot && length(passed) == 0 && names(branch)[v] == classes$fileClasses[m]){
+        #             
+        #             ymax = max(c(branch[[v]]$errorRange[,3], dists[[v]][,2]))
+        #             ymin = min(c(branch[[v]]$errorRange[,2], dists[[v]][,2]))
+        #             xmax = max(branch[[v]]$errorRange[,1], dists[[v]][,1])
+        #             xmin = min(branch[[v]]$errorRange[,1], dists[[v]][,1])
+        #             
+        #             #plots the error range graph
+        #             plot(c(1,xmax), c(ymin, ymax), col="white", main=concatenate(c("Error Range predictor ", f, ", ", i)))
+        #             lines(c(1,xmax), c(0,0), col="gray")
+        #             sorted <- sort.int(branch[[v]]$errorRange[,1], index.return = TRUE)$ix
+        #             meanRange = rowMeans(branch[[v]]$errorRange[(sorted),-1])
+        #             lines(x = branch[[v]]$errorRange[sorted,1], y = meanRange, col="green")
+        #             lines(x = branch[[v]]$errorRange[sorted,1], y = branch[[v]]$errorRange[sorted,2], col="red")
+        #             lines(x = branch[[v]]$errorRange[sorted,1], y = branch[[v]]$errorRange[sorted,3], col="red")
+        #             lines(dists[[v]], col="black")
+        #             
+        #             plot(branch[[v]]$representant, type="l", col="red", main=concatenate(c("Curves predictor ", f, ", ", i)))
+        #             lines(test, col="blue")
+        #             lines(x = targets[[v]][,1], y = targets[[v]][,2], col="black")
+        #             if(f == 1){
+        #               points(refPoints[[v]], branch[[v]]$representant[refPoints[[v]]], col="red")
+        #               points(targets[[v]][tarPoints[[v]],], col="black")
+        #             }
+        #           }
+        #         }
         
         for(v in passed){
           
@@ -575,7 +544,7 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
           
           #gets the minimum computed error
           #minError <- classificationResult[v]
-          minError <- median(as.numeric(errors[v,]))
+          minError <- median(as.numeric(errors[passed,]))
           
           #cat(" -------", minErrorIndex, "------", file=logFile, append=TRUE)
           cat(" E =", minError, "\n", file=logFile, append=TRUE)
@@ -583,7 +552,6 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
           #adds a vote for this leaf's class with the weight as the minimum error value
           #cat("leaf:", v, " descriptor:", i, "test:", m, "first level:", k, "second level:", j, "\n")
           votes <- rbind(votes, matrix(c(as.numeric(names(branch)[v]), minError), nrow=1))
-          chosenErrors <- rbind(chosenErrors, errors[v,])
         }
       }
       else{
@@ -617,16 +585,14 @@ hierarchicalFeatureBasedPrediction3 <- function(model, testDir="", testing=chara
     
     cat("\nvotes:", length(votes[,1]), "\n", file=logFile, append=TRUE)
     cat.matrix(votes, file=logFile, append=TRUE)
-
+    
     cat("comparisons:", comparisons, "\n", file=logFile, append=TRUE)
-
+    
     cat("test", m, ". ", file=logFile, append=TRUE)
     
     if(length(votes) > 1){
       
-      chosenErrors <- chosenErrors[-1,]
-      result <- makeDecision(chosenErrors, medianThreshold)
-      result <- votes[result,]
+      result <- votes[which.min(votes[,2]),]
       #result <- votes[which.max(votes[,2]),]
       #checks the result
       if(paste("0", as.character(result[1]), sep="") == classes$fileClasses[m]){
@@ -677,7 +643,7 @@ print.hierarchicalModelAux <- function(model, level, file){
   }
 }
 
-makeDecision <- function(results, K=2, level=1, maxLevel=3){
+makeDecision <- function(results, thresholds, K=2){
   
   medians <- apply(results, 1, median)
   
@@ -687,7 +653,9 @@ makeDecision <- function(results, K=2, level=1, maxLevel=3){
   
   Y <- mapply(function(x){
     
-    return(which.min(results[sortedIndex,x]))
+    passed <- which(results[sortedIndex,x] <= thresholds[sortedIndex,x])
+    return(passed[which.min(results[sortedIndex[passed],x])])
+    #return(which(results[sortedIndex,x] <= thresholds[sortedIndex,x] & results[sortedIndex,x] == min(results[sortedIndex,x])))
     
   }, 1:N)
   
@@ -697,17 +665,7 @@ makeDecision <- function(results, K=2, level=1, maxLevel=3){
     
   }, 1:K)
   
-  maxCounts <- max(counts)
-  
-  decision <- sortedIndex[which(counts == maxCounts)]
-  
-  if(length(decision) > 1 && level < maxLevel){
-    
-    level <- level + 1
-    decision <- decision[makeDecision(results[decision,], length(decision), level, maxLevel)]
-  }
-  else
-    decision <- decision[1]
+  decision = sortedIndex[which.max(counts)]
   
   return(decision)
 }
@@ -735,7 +693,7 @@ getRankedMatrix <- function(similarityMatrix, progress=FALSE){
   rankedMatrix <- matrix(rep(0, C^2), ncol=C)
   
   for(j in 1:C){
-      
+    
     errors <- mapply(function(f){
       
       return(similarityMatrix[[f]][j,])

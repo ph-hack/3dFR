@@ -136,10 +136,10 @@ pre_process <- function(faceDir, ldmkDir, toDir, transfFile, range=0, exception=
     #cat("Weights computed\n")
     
     #curves <- curvatureImage(img, weights, concatenate(c(toDir, getFaceID(names[i]), ".curvesweighted.jpg")), 3)
-    curves <- curvatureImage(img, "", concatenate(c(toDir, getFaceID(names[i]), ".curves.jpg")), 3)
-    cat("Curvature measures made\n")
+    #curves <- curvatureImage(img, "", concatenate(c(toDir, getFaceID(names[i]), ".curves.jpg")), 3)
+    #cat("Curvature measures made\n")
     
-    cat("Computing curvature image: ", crono.end(start), "\n", file=logFile, append=TRUE)
+    #cat("Computing curvature image: ", crono.end(start), "\n", file=logFile, append=TRUE)
     
     cat(i/n * 100, "%\n")
   }
