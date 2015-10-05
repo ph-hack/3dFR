@@ -3,6 +3,20 @@ library(jpeg) #open jpg images
 library(stinepack) #interpolate curves
 library(abind) #combine multi-dimensional arrays
 
+read.surfKeyPoints <- function(file){
+  
+  kpLines <- strsplit(readLines(file), " ")
+  M <- length(kpLines)
+  
+  coords <- mapply(function(x){
+    
+    return(as.numeric(x))
+    
+  }, kpLines)
+  
+  return(t(coords))
+}
+
 # Writes the weights into the specified file. ----
 # input:
 #   weights = a list containing for each class, a weight for each descriptor

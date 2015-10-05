@@ -9,8 +9,8 @@ import cv2, os
 import matplotlib.pyplot as plt
 import numpy as np
 
-path = '/home/hick/Documents/Mestrado/Research/Code/'
-toPath = '/home/hick/Documents/Mestrado/Research/Code/Experiments6/data/'
+path = '/home/hick/Documents/Mestrado/Research/Code/Experiments6/unholed/'
+toPath = '/home/hick/Documents/Mestrado/Research/Code/Experiments6/surf_data/'
 
 surf = cv2.xfeatures2d.SURF_create(50)
 
@@ -26,9 +26,24 @@ for root, dirs, files in os.walk(path):
             
             s = len(kp)
             coords = np.zeros((s,2), np.int)
+
+            i = 0
+
+            for p in kp:
+
+                x = np.int(p.pt[0])
+                y = np.int(p.pt[1])
+                coords[i,:] = (x,y)
+
+                i += 1
             
-            np.savetxt(topath + file + '_kp.txt', coords, '%d')
-            np.savetxt(topath + file + '_desc.txt', desc, '%f')
+            np.savetxt(toPath + file + '_kp.txt', coords, '%d')
+            np.savetxt(toPath + file + '_desc.txt', desc, '%f')
+
+            print 'saving ', file, ' data'
+
+#print desc, len(desc)
+#print kp, len(kp)
             
 
 #img = np.loadtxt(path + '04201d434.unholed.jpg.dat')

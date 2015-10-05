@@ -603,8 +603,8 @@ angleBetweenSegments <- function(l1, l2){
   l1[[2]][1] <- a1 * l1[[2]][2]
   l2[[2]][1] <- a2 * l2[[2]][2]
   
-  c <- l1[[2]][1] * l2[[2]][1] + l1[[2]][2] * l2[[2]][2]
-  res <- acos(c)
+  cossine <- round(l1[[2]][1] * l2[[2]][1] + l1[[2]][2] * l2[[2]][2], 8)
+  res <- acos(cossine)
   
   p2 <- rotateCurve(matrix(l1[[2]], ncol=2), 0, res)
   p3 <- rotateCurve(matrix(l1[[2]], ncol=2), 0, -res)
@@ -616,4 +616,27 @@ angleBetweenSegments <- function(l1, l2){
     cat("NAN!", c, "v1 =", l1[[2]], "v2 =", l2[[2]], "\n")
   
   return(res)
+}
+
+computeCombinations <- function(M, N){
+  
+  comb <- matrix(rep(0, 2), ncol=2)
+  
+  for(i in 1:M){
+    
+    if(i <= N){
+      for(j in i:N){
+        
+        comb <- rbind(comb, matrix(c(i,j), ncol=2))
+      }
+    }
+    else{
+      for(j in 1:N){
+        
+        comb <- rbind(comb, matrix(c(i,j), ncol=2))
+      }
+    }
+  }
+  
+  return(comb[-1,])
 }

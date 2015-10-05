@@ -1,3 +1,14 @@
+getMatchPairsPipeline <- function(c1, c2, f1, f2){
+  
+  matches <- computeMatches(f1, f2)
+  mMatrix <- concatMatches(c1, c2, matches)
+  matchPairs <- computeMatchesPairs(mMatrix)
+  Res <- ransac(matchPairs, geoTransformModel, geoTransformDistance, linearGeoTransform,
+                0.05, minInitialSamples = 1, maxIter = 20)
+  
+  return(Res)
+}
+
 # The RANSAC algorithm -----
 # This function returns the ouliers indexes of the data, given a representation
 # and a metric function.
@@ -19,13 +30,13 @@ ransac <- function(data, model, metric, representation, threshold=0.05, cr=0.9, 
   #Initiates the loops
   iter <- 1
   consensus <- sample(1:M, minInitialSamples)
-  curConsensus <- 0
+  curConsensus <- consensus
   #it must stops whether the cr is matched or the maximum number of iterations
   #is reached
   while(length(consensus)/M < cr && iter <= maxIter){
     
     #picks the minimal initial samples
-    initSamples <- mData[consensus]
+    initSamples <- mData[curConsensus]
     
     #builds the model
     m <- model(initSamples)
@@ -43,6 +54,8 @@ ransac <- function(data, model, metric, representation, threshold=0.05, cr=0.9, 
     
     if(length(curConsensus) > length(consensus))
       consensus <- curConsensus
+    else
+      curConsensus <- sample(c(1:M)[-curConsensus], minInitialSamples)
     
     #prints loop entering conditions
     cat("consensus:", length(consensus), "CR:", length(consensus)/M, "iter:", iter, "error:", mean(dists), min(dists), "\n")
@@ -116,25 +129,25 @@ geoTransformDistance <- function(p1, p2){
 }
 
 #Computes the matches given a distance function to be used ----
-computeMatches <- function(rawdata, distance=my.cosineDistance){
+computeMatches <- function(d1, d2, distance=my.cosineDistance){
   
-  M <- length(rawdata[,1])
-  distMatrix <- matrix(rep(0, M*M), ncol=M)
+  M <- length(d1[,1])
+  N <- length(d2[,1])
+  distMatrix <- matrix(rep(0, M*N), ncol=N)
   
-  for(i in 1:(M-1)){
+  for(i in 1:M){
     
-    distMatrix[i,i:M] <- apply(rawdata[i:M,], 1, function(x, y){
+    distMatrix[i,1:N] <- apply(d2[1:N,], 1, function(x, y){
       
       return(distance(x,y)$error)
       
-    }, rawdata[i,])
-    
-    distMatrix[i:M,i] <- t(distMatrix[i,i:M])
+    }, d1[i,])
   }
   
-  distMatrix[1 + (0:(M-1))*(M+1)] <- max(distMatrix) + 1
+  #distMatrix[1 + (0:(M-1))*(M+1)] <- max(distMatrix) + 1
   
-  closest <- apply(distMatrix, 1, which.min)
+  closestM <- apply(distMatrix, 1, which.min)
+  closestN <- apply(distMatrix, 2, which.min)
   
   queue <- 1:M
   matches <- list()
@@ -144,12 +157,12 @@ computeMatches <- function(rawdata, distance=my.cosineDistance){
     i = queue[1]
     queue = queue[-1]
     
-    x = closest[i]
+    x = closestM[i]
     
-    if(closest[x] == i){
+    if(closestN[x] == i){
       
       matches[[length(matches) + 1]] <- c(i,x)
-      queue = queue[-which(queue == x)]
+      #queue = queue[-which(queue == x)]
     }
   }
   
@@ -157,15 +170,15 @@ computeMatches <- function(rawdata, distance=my.cosineDistance){
 }
 
 #Puts the matched points in the same row ----
-concatMatches <- function(data, matches){
+concatMatches <- function(d1, d2, matches){
   
-  N = length(data[1,])
+  N = length(d1[1,])
   
   newData = matrix(rep(0,2*N), ncol=2*N)
   
   for(m in matches){
     
-    newData <- rbind(newData, matrix(c(data[m[1],], data[m[2],]), ncol=2*N))
+    newData <- rbind(newData, matrix(c(d1[m[1],], d2[m[2],]), ncol=2*N))
   }
   
   return(newData[-1,])
