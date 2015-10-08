@@ -1,12 +1,106 @@
-getMatchPairsPipeline <- function(c1, c2, f1, f2){
+getMatchPairsPipeline <- function(c1, c2, f1, f2, facefile1, facefile2){
   
   matches <- computeMatches(f1, f2)
   mMatrix <- concatMatches(c1, c2, matches)
   matchPairs <- computeMatchesPairs(mMatrix)
-  Res <- ransac(matchPairs, geoTransformModel, geoTransformDistance, linearGeoTransform,
+  filteredPairs <- ransac(matchPairs, geoTransformModel, geoTransformDistance, linearGeoTransform,
                 0.05, minInitialSamples = 1, maxIter = 20)
   
+  Res <- getCurvesFromMatchPairs(matchPairs[filteredPairs], facefile1, facefile2)
+  
   return(Res)
+}
+
+computeMatchCurvesSimilarity <- function(matchCurves){
+  
+  P <- length(matchCurves[[1]])
+  
+  #dtws <- lapply(matchCurves[[1]], function(x,y){
+  #  
+  #  return(my.dtwBasedDistance2(x, y, 2, 20, tol = 10))
+  # 
+  #}, matchCurves[[2]])
+  
+  dtws <- mapply(function(x,y){
+    
+    return(list(my.dtwBasedDistance2(x, y, 2, 20, tol = 10)))
+    
+  }, matchCurves[[1]], matchCurves[[2]], USE.NAMES=TRUE)
+  
+  sizes <- list2vector(getAllFieldFromList(dtws, index = 'size', 2))
+  distances <- list2vector(getAllFieldFromList(dtws, 'distance', 2))
+  errors <- list2vector(getAllFieldFromList(dtws, 'error', 2))
+  
+  return(list(numPoints=P, sizes=sizes, distances=distances, errors=errors))
+}
+
+## Retreive the curves data given by the match pairs of two faces ----
+getCurvesFromMatchPairs <- function(matchPairs, facefile1, facefile2, threshold=45){
+  
+  c1 <- getCurvesFromMatchPairsAux(matchPairs, facefile1, 1, threshold)
+  c2 <- getCurvesFromMatchPairsAux(matchPairs, facefile2, 2, threshold)
+  
+  removedTotal <- c(c1$removed, c2$removed)
+  removedTotal <- unique(removedTotal)
+  removedTotal <- list2vector(removedTotal)
+  
+  curves1 <- c1$curves[-removedTotal]
+  curves2 <- c2$curves[-removedTotal]
+  
+  return(list(curves1, curves2))
+}
+
+## Auxiliar function for the one with similar name ----
+#  It returns a list of curves for the 'pt' (1 or 2) face of a match pair
+getCurvesFromMatchPairsAux <- function(matchPairs, facefile, pt, threshold=45){
+  
+  curves <- list()
+  cIndex <- 1
+  removed <- list()
+  rIndex <- 1
+  
+  face <- readImageData(facefile)
+  
+  indexMap <- list(1:2, 3:4)
+  
+  P <- length(matchPairs)
+  
+  for(i in 1:P){
+    
+    p1 <- matchPairs[[i]][[1]][indexMap[[pt]]]
+    p2 <- matchPairs[[i]][[2]][indexMap[[pt]]]
+    
+    line <- findLine(p1, p2)
+    
+    d <- 1
+    if(line$inverted)
+      d <- 2
+              
+    xs <- min(p1[d],p2[d]):max(p1[d],p2[d])
+    
+    s <- length(xs)
+    
+    if(s < threshold){
+      
+      removed[[rIndex]] <- i
+      rIndex <- rIndex + 1
+    }
+    
+    curve <- rep(0, s)
+    index <- 1
+    
+    for(x in xs){
+      
+      y <- appLinear(line, x)
+      curve[index] <- face[y,x]
+      index <- index + 1
+    }
+    
+    curves[[cIndex]] <- curve
+    cIndex <- cIndex + 1
+  }
+  
+  return(list(curves=curves, removed=removed))
 }
 
 # The RANSAC algorithm -----
@@ -54,7 +148,7 @@ ransac <- function(data, model, metric, representation, threshold=0.05, cr=0.9, 
     
     if(length(curConsensus) > length(consensus))
       consensus <- curConsensus
-    else
+    else if(length(curConsensus) != 0 && length(curConsensus) != M)
       curConsensus <- sample(c(1:M)[-curConsensus], minInitialSamples)
     
     #prints loop entering conditions
@@ -422,12 +516,12 @@ my.dtwBasedDistance2 <- function(reference, target, smooth=0, range=0, threshold
       distance <- distance * (1 + (useTolAsWeight * abs(tolerance))/tol)
     }
     
-    return(list(dtw=dtw, error=distance/(Tp^2), distance=distance, points=pts, tolerance=tolerance, target=target, dist=my.as.matrix(dtw[pts])))
+    return(list(dtw=dtw, error=distance/(Tp^2), distance=distance, size=Tp, points=pts, tolerance=tolerance, target=target, dist=my.as.matrix(dtw[pts])))
   }
   else{
     
     #cat("No match found!\n")
-    return(list(dtw=dtw, error=0.02, distance=100, points=c(), tolerance=tol, target=target, dist=my.as.matrix(rep(100, length(target)))))
+    return(list(dtw=dtw, error=0.02, distance=100, size=0, points=c(), tolerance=tol, target=target, dist=my.as.matrix(rep(100, length(target)))))
   }
 }
 
