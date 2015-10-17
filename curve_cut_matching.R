@@ -1,3 +1,267 @@
+computeGalleryCurveSaliency <- function(curvesFolder="curves/", kpsFolder="kps/", surf_featuresFolder="surf_features/",
+                                        surf_kpsFolder="surf_kps/", saliencyToFolder="saliency/"){
+  
+  curvesFiles <- concatenate(list(curvesFolder, dir(curvesFolder)))
+  kpsFiles <- concatenate(list(kpsFolder, dir(kpsFolder)))
+  surf_featuresFiles <- concatenate(list(surf_featuresFolder, dir(surf_featuresFolder)))
+  surf_kpsFiles <- concatenate(list(surf_kpsFolder, dir(surf_kpsFolder)))
+  
+  classes <- getClassFromFiles(files=curvesFiles)
+  
+  # gets the number of samples
+  M <- length(curvesFiles)
+  
+  saliencies <- list()
+  
+  for(m in 1:M){
+    
+    sampleName <- getFaceID(curvesFiles[m])
+    
+    curves <- readMainLines(curvesFiles[m], "list")
+    kpsIdx <- read.surfKeyPoints(kpsFiles[m])
+    surf_features <- read.surfKeyPoints(surf_featuresFiles[m])
+    surf_kps <- read.surfKeyPoints(surf_kpsFiles[m])
+    
+    N <- length(curves)
+    
+    errorMatrix <- list()
+    errorMatrix[[N]] <- 0
+    
+    #gets its class
+    sampleClass <- classes$fileClasses[m]
+    
+    #gets all samples from the other classes
+    otherClassesSamples <- which(classes$fileClasses != sampleClass)
+    M2 <- length(otherClassesSamples)
+    
+    #for each of those
+    for(i in 1:M2){
+      
+      j <- otherClassesSamples[i]
+      otherCurves <- readMainLines(curvesFiles[j], "list")
+      otherKpsIdx <- read.surfKeyPoints(kpsFiles[j])
+      otherSurf_features <- read.surfKeyPoints(surf_featuresFiles[j])
+      otherSurf_kps <- read.surfKeyPoints(surf_kpsFiles[j])
+      
+      #computes the matches
+      matches <- computeMatches(surf_features, otherSurf_features)
+      
+      if(length(matches) > 0){
+        
+        matchPairs <- computeMatchesPairs(surf_kps, otherSurf_kps, matches)
+        filteredPairs <- ransac(matchPairs$coords, geoTransformModel, geoTransformDistance, linearGeoTransform,
+                                0.05, minInitialSamples = 1, maxIter = 20)
+        
+        #curvesIdx <- getMatchCurvesIdx(matchPairs$idx, kpsIdx, otherKpsIdx)
+        curvesIdx <- getMatchCurvesIdx(matchPairs$idx[filteredPairs], kpsIdx, otherKpsIdx)
+        
+        #keeps the indexes of the curves with matches
+        cat("almost")
+        #computes the distances
+        
+        #stores the errors for the correct curves
+      }
+    }
+    
+    saliencies[[m]] <- errorMatrix
+    
+#     for(i in 1:N){
+#       
+#       n <- length(errorMatrix[[i]])
+#       write(errorMatrix[[i]], concatenate(list(saliencyToFolder, sampleName, ".saliency.dat")), n, TRUE, " ")
+#     }
+  }
+}
+## Eliminates the matches whose members are not in idx ####
+getMatchCurvesIdx <- function(matches, idx1, idx2){
+  
+  mIdx <- list()
+  
+  N <- length(matches)
+  
+  i <- 1
+  j <- 1
+  for(m in matches){
+    
+    n1 <- length(idx1[,1])
+    i1 <- rep(FALSE, n1)
+    for(x in 1:n1){
+      
+      if(idx1[x,1] == m[[1]][1] && idx1[x,2] == m[[1]][2]){
+        
+        i1[x] <- TRUE
+      }
+      else if(idx1[x,1] > m[[1]][1] || idx1[x,2] > m[[1]][2]){
+        
+        break
+      }
+    }
+    
+    n2 <- length(idx2[,1])
+    i2 <- rep(FALSE, n2)
+    for(x in 1:n2){
+      
+      if(idx2[x,1] == m[[2]][1] && idx2[x,2] == m[[2]][2]){
+        
+        i2[x] <- TRUE
+      }
+      else if(idx2[x,1] > m[[2]][1] || idx2[x,2] > m[[2]][2]){
+        
+        break
+      }
+    }
+    
+    i1 <- which(i1)
+    i2 <- which(i2)
+    
+    if(length(i1) > 0 && length(i2) > 0){
+      
+      mIdx[[i]] <- list('1' = i1, '2' = i2)
+      i <- i + 1
+      
+      cat("index:", j, "\n")
+    }
+    
+    j <- j + 1
+  }
+  return(mIdx)
+}
+
+## Computes the distance point to point ####
+my.p2p.dist <- function(reference, target, smooth=0, isOpt=TRUE){
+  
+  M <- length(reference)
+  N <- length(target)
+  
+  if(smooth > 0){
+    reference <- gaussianSmooth(c(rep(reference[1], 2*smooth), reference, rep(reference[M], 2*smooth)), c(smooth))[(1 + 2*smooth):(M + 2*smooth)]
+    target <- gaussianSmooth(c(rep(target[1], 2*smooth), target, rep(target[N], 2*smooth)), c(smooth))[(1 + 2*smooth):(N + 2*smooth)]
+  }
+  
+  #converts them into 2D matrices
+  reference <- my.as.matrix(reference)
+  target <- my.as.matrix(target)
+  
+  #takes out the null parts of both curves
+  reference <- takeNoneFaceOut(reference, TRUE)
+  target <- takeNoneFaceOut(target, TRUE)
+  
+  distances <- dist.p2p(reference, target, isOpt)
+  #computes the mean error
+  error <- mean(abs(distances[,2]))
+  
+  return(list(error=error, distance=sum(abs(distances)), size=min(length(reference[,1]), length(target[,1]))))
+}
+
+## Computes all curves of all samples of the gallery. ####
+#  It is assumed that the files with the keypoints coordinates and the files with the
+#  face depth image are in separate folders and in both folders the data is correspondent,
+#  i.e. the data for the same samples are in both folders.
+computeCurvesOfGallery <- function(coordsfolder, facefolder, threshold=45, coordsToFolder="", faceToFolder=""){
+  
+  coordsFiles <- dir(coordsfolder)
+  faceFiles <- dir(facefolder)
+  
+  M <- length(coordsFiles)
+  
+  for(i in 1:M){
+    
+    coords <- concatenate(list(coordsfolder, coordsFiles[i]))
+    face <- concatenate(list(facefolder, faceFiles[i]))
+    Res <- getCurvesFromSample(coords, face, threshold, coordsToFolder, faceToFolder)
+    
+    cat(i*100/M, "%\n")
+  }
+  
+  cat("Done!")
+}
+
+## Extracts the curves of a face from its key points and eliminates the ones whose ####
+#  length is smaller than the given threshold, saves the final keypoints' indexes 
+#  and the curves on their respective files (*.coords.dat and *.curves.dat)
+getCurvesFromSample <- function(coordsfile, facefile, threshold=45, coordsToFolder="", faceToFolder=""){
+  
+  coords <- read.surfKeyPoints(coordsfile)
+  face <- readImageData(facefile)
+  name = getFaceID(facefile)
+  
+  M <- length(coords[,1])
+  
+  pairs <- list()
+  index <- 1
+  for(i in 1:(M-1)){
+    for(j in (i+1):M){
+      
+      #pairs[[index]] <- c(coords[i,], coords[j,])
+      pairs[[index]] <- c(i,j)
+      index <- index + 1
+    }
+  }
+  
+  P <- index - 1
+  curves <- list()
+  cIndex <- 1
+  removed <- list()
+  rIndex <- 1
+  
+  for(i in 1:P){
+    
+    p1 <- coords[pairs[[i]][1],] #pairs[[i]][1:2]
+    p2 <- coords[pairs[[i]][2],] #pairs[[i]][3:4]
+    
+    line <- findLine(p1, p2)
+    
+    d <- 1
+    if(line$inverted)
+      d <- 2
+    
+    xs <- min(p1[d],p2[d]):max(p1[d],p2[d])
+    
+    s <- length(xs)
+    
+    if(s < threshold){
+      
+      removed[[rIndex]] <- i
+      rIndex <- rIndex + 1
+    }
+    
+    curve <- rep(0, s)
+    index <- 1
+    
+    for(x in xs){
+      
+      y <- floor(appLinear(line, x))
+      
+      if(line$inverted)
+        curve[index] <- face[x,y]
+      else
+        curve[index] <- face[y,x]
+      
+      index <- index + 1
+    }
+    
+    curves[[cIndex]] <- curve
+    cIndex <- cIndex + 1
+  }
+  
+  removed <- list2vector(removed)
+  
+  Res <- list()
+  
+  Res[["coords"]] <- pairs[-removed]
+  Res[["curves"]] <- curves[-removed]
+  
+  M <- length(Res[["coords"]])
+
+  for(i in 1:M){
+    write(Res[["coords"]][[i]], concatenate(c(coordsToFolder, name, ".coords.dat")), sep = " ", append = TRUE, ncolumns = 2)
+    N <- length(Res[["curves"]][[i]])
+    write(Res[["curves"]][[i]], concatenate(c(faceToFolder, name, ".curves.dat")), sep = " ", append = TRUE, ncolumns = N)
+  }
+  
+  return(Res)
+}
+
 getMatchPairsPipeline <- function(c1, c2, f1, f2, facefile1, facefile2){
   
   matches <- computeMatches(f1, f2)
@@ -11,7 +275,7 @@ getMatchPairsPipeline <- function(c1, c2, f1, f2, facefile1, facefile2){
   return(Res)
 }
 
-computeMatchCurvesSimilarity <- function(matchCurves){
+computeMatchCurvesSimilarity <- function(matchCurves, f=my.dtwBasedDistance2, params=list(smooth=2,range=20,tol=10)){
   
   P <- length(matchCurves[[1]])
   
@@ -23,7 +287,8 @@ computeMatchCurvesSimilarity <- function(matchCurves){
   
   dtws <- mapply(function(x,y){
     
-    return(list(my.dtwBasedDistance2(x, y, 2, 20, tol = 10)))
+    #return(list(my.dtwBasedDistance2(x, y, 2, 20, tol = 10)))
+    return(list( do.call(f, merge.list(list(x,y), params)) ))
     
   }, matchCurves[[1]], matchCurves[[2]], USE.NAMES=TRUE)
   
@@ -150,6 +415,8 @@ ransac <- function(data, model, metric, representation, threshold=0.05, cr=0.9, 
       consensus <- curConsensus
     else if(length(curConsensus) != 0 && length(curConsensus) != M)
       curConsensus <- sample(c(1:M)[-curConsensus], minInitialSamples)
+    else if(length(curConsensus) == 0)
+      curConsensus <- sample(c(1:M)[-consensus], minInitialSamples)
     
     #prints loop entering conditions
     cat("consensus:", length(consensus), "CR:", length(consensus)/M, "iter:", iter, "error:", mean(dists), min(dists), "\n")
@@ -279,22 +546,27 @@ concatMatches <- function(d1, d2, matches){
 }
 
 #Computes the combinations of pairs of matches ----
-computeMatchesPairs <- function(matchesData){
+computeMatchesPairs <- function(d1, d2, matches){
   
-  M <- length(matchesData[,1])
+  M <- length(matches)
+  
+  matchesData <- concatMatches(d1, d2, matches)
   
   matchesPairs <- list()
+  pairs <- list()
+  
   k <- 1
   
   for(i in 1:(M-1)){
     for(j in (i+1):M){
       
       matchesPairs[[k]] <- list('1' = matchesData[i,], '2' = matchesData[j,])
+      pairs[[k]] <- list('1' = c(matches[[i]][1], matches[[j]][1]), '2' = c(matches[[i]][2], matches[[j]][2]))
       k <- k + 1
     }
   }
   
-  return(matchesPairs)
+  return(list(coords=matchesPairs, idx=pairs))
 }
 
 # The DTW-based distance function ----

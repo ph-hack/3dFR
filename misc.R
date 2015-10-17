@@ -640,3 +640,25 @@ computeCombinations <- function(M, N){
   
   return(comb[-1,])
 }
+
+And <- function(bools){
+  
+  return(Reduce(function(y,x){
+    
+    return(y && x)
+    
+  }, bools, TRUE))
+}
+
+list.find <- function(l, x){
+  
+  M <- length(l)
+  for(i in 1:M){
+    
+    if(identical(l[[i]],x))
+      
+      return(i)
+  }
+  
+  return(0)
+}
