@@ -32,6 +32,7 @@ computeGalleryCurveSaliency <- function(curvesFolder="curves/", kpsFolder="kps/"
     
     #gets all samples from the other classes
     otherClassesSamples <- which(classes$fileClasses != sampleClass)
+    #otherClassesSamples <- c(1:M)[-m]
     M2 <- length(otherClassesSamples)
     
     #for each of those
@@ -50,28 +51,84 @@ computeGalleryCurveSaliency <- function(curvesFolder="curves/", kpsFolder="kps/"
         
         matchPairs <- computeMatchesPairs(surf_kps, otherSurf_kps, matches)
         filteredPairs <- ransac(matchPairs$coords, geoTransformModel, geoTransformDistance, linearGeoTransform,
-                                0.05, minInitialSamples = 1, maxIter = 20)
+                                0.07, minInitialSamples = 1, maxIter = 20)
         
+        #keeps the indexes of the curves with matches
         #curvesIdx <- getMatchCurvesIdx(matchPairs$idx, kpsIdx, otherKpsIdx)
         curvesIdx <- getMatchCurvesIdx(matchPairs$idx[filteredPairs], kpsIdx, otherKpsIdx)
         
-        #keeps the indexes of the curves with matches
-        cat("almost")
-        #computes the distances
-        
-        #stores the errors for the correct curves
+        if(length(curvesIdx) > 0){
+          #computes the distances
+          errors <- mapply(function(idx, curves, oCurves){
+            
+            return(my.p2p.dist(curves[[idx[[1]]]], oCurves[[idx[[2]]]], smooth = 2)$error)
+            
+          }, curvesIdx, MoreArgs = list(curves=curves, oCurves=otherCurves))
+          
+          #stores the errors for the correct curves
+          indexes <- list2vector(getAllFieldFromList(curvesIdx, 1, 2))
+          ek <- 1
+          for(k in indexes){
+            
+            if(is.list(errorMatrix[[k]]))
+              errorMatrix[[k]] <- concatenateList(list(errorMatrix[[k]], list(errors[ek])))
+            else
+              errorMatrix[[k]] <- list(errors[ek])
+            
+            ek <- ek + 1
+          }
+          
+          #cat("almost")
+        }
       }
     }
     
     saliencies[[m]] <- errorMatrix
     
-#     for(i in 1:N){
-#       
-#       n <- length(errorMatrix[[i]])
-#       write(errorMatrix[[i]], concatenate(list(saliencyToFolder, sampleName, ".saliency.dat")), n, TRUE, " ")
-#     }
+    file <- concatenate(list(saliencyToFolder, sampleName, ".saliency.dat"))
+    for(i in 1:N){
+      
+      if(!is.null(errorMatrix[[i]])){
+        
+        n <- length(errorMatrix[[i]])
+        write(i, file, 1, TRUE)
+        write(list2vector(errorMatrix[[i]]), file, n, TRUE, " ")
+      }
+    }
+    
+    cat(m/M*100, "%\n")
   }
 }
+
+## Retrieves the saliencies data of a sample face from the file ####
+read.saliency <- function(file){
+  
+  lines <- readLines(file)
+  
+  N <- length(lines)
+  
+  saliencies <- list()
+  idx <- list()
+  i <- 1
+  index <- 1
+  while(i <= N){
+    
+    idx[[index]] <- as.numeric(lines[i])
+    i <- i + 1
+    saliencies[[index]] <- as.numeric(strsplit(lines[[i]], " ")[[1]])
+    i <- i + 1
+    index <- index + 1
+  }
+  
+  if(saliencies[[index-1]] == 0){
+    
+    saliencies <- saliencies[-(index-1)]
+    idx <- idx[-(index-1)]
+  }
+  
+  return(list(saliencies=saliencies, idxs=idx))
+}
+
 ## Eliminates the matches whose members are not in idx ####
 getMatchCurvesIdx <- function(matches, idx1, idx2){
   
@@ -91,7 +148,7 @@ getMatchCurvesIdx <- function(matches, idx1, idx2){
         
         i1[x] <- TRUE
       }
-      else if(idx1[x,1] > m[[1]][1] || idx1[x,2] > m[[1]][2]){
+      else if(idx1[x,1] > m[[1]][1] || (idx1[x,1] == m[[1]][1] && idx1[x,2] > m[[1]][2])){
         
         break
       }
@@ -105,7 +162,7 @@ getMatchCurvesIdx <- function(matches, idx1, idx2){
         
         i2[x] <- TRUE
       }
-      else if(idx2[x,1] > m[[2]][1] || idx2[x,2] > m[[2]][2]){
+      else if(idx2[x,1] > m[[2]][1] || (idx2[x,1] == m[[2]][1] && idx2[x,2] > m[[2]][2])){
         
         break
       }
@@ -119,7 +176,7 @@ getMatchCurvesIdx <- function(matches, idx1, idx2){
       mIdx[[i]] <- list('1' = i1, '2' = i2)
       i <- i + 1
       
-      cat("index:", j, "\n")
+      #cat("index:", j, "\n")
     }
     
     j <- j + 1
@@ -357,7 +414,10 @@ getCurvesFromMatchPairsAux <- function(matchPairs, facefile, pt, threshold=45){
     for(x in xs){
       
       y <- appLinear(line, x)
-      curve[index] <- face[y,x]
+      if(line$inverted)
+        curve[index] <- face[x,y]
+      else
+        curve[index] <- face[y,x]
       index <- index + 1
     }
     
@@ -419,7 +479,7 @@ ransac <- function(data, model, metric, representation, threshold=0.05, cr=0.9, 
       curConsensus <- sample(c(1:M)[-consensus], minInitialSamples)
     
     #prints loop entering conditions
-    cat("consensus:", length(consensus), "CR:", length(consensus)/M, "iter:", iter, "error:", mean(dists), min(dists), "\n")
+    #cat("consensus:", length(consensus), "CR:", length(consensus)/M, "iter:", iter, "error:", mean(dists), min(dists), "\n")
     
     iter <- iter + 1
   }
@@ -438,10 +498,15 @@ plotMatchPairs <- function(matchPairs, range=c(0,100)){
   
   for(pair in matchPairs){
     
-    points(pair[[1]][1], pair[[1]][2], col="blue")
-    points(pair[[2]][1], pair[[2]][2], col="blue")
-    points(pair[[1]][3], pair[[1]][4], col="red")
-    points(pair[[2]][3], pair[[2]][4],col="red")
+    p11 <- pair[[1]][1:2]
+    p12 <- pair[[2]][1:2]
+    p21 <- pair[[1]][3:4]
+    p22 <- pair[[2]][3:4]
+    
+    points(p11[1], p11[2], col="blue")
+    points(p12[1], p12[2], col="blue")
+    points(p21[1], p21[2], col="red")
+    points(p22[1], p22[2], col="red")
     
     lines(pair[[1]][c(1,3)], pair[[1]][c(2,4)], col="gray")
     lines(pair[[2]][c(1,3)], pair[[2]][c(2,4)], col="gray")
