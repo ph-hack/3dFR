@@ -3,6 +3,111 @@ library(jpeg) #open jpg images
 library(stinepack) #interpolate curves
 library(abind) #combine multi-dimensional arrays
 
+computeMeanFaces <- function(fromDir, toDir){
+  
+  files <- dir(fromDir)
+  classes <- getClassFromFiles(fromDir)
+  
+  M <- length(files)
+  
+  
+}
+
+outlierRemoval <- function(img){
+  
+  col = length(img[1,])
+  row = length(img[,1])
+  
+  gImg <- gradientImg(img)
+  
+  hg <- hist(gImg, breaks=100, plot=FALSE)
+  hcum <- cumsum(hg$counts)/(col*row)
+  
+  th <- hg$breaks[which(hcum > 0.99)[1]]
+  
+  candidates <- which(gImg[1:(col*row)] >= th)
+  
+  sds <- rep(0, length(candidates))
+  i <- 1
+  
+  for(k in candidates){
+    
+    I <- index2colrow(k, col, row)
+    
+    R <- (I[2]-1):(I[2]+1)
+    C <- (I[1]-1):(I[1]+1)
+    
+    sds[i] <- tryCatch(min(img[R,C]), error=function(e){return(0)})
+    i <- i + 1
+  }
+  
+  chosen <- which(sds > 0)
+  
+  img[candidates[chosen]] <- 0
+  
+  return(img)
+}
+
+gradientImg <- function(img){
+  
+  col = length(img[1,])
+  row = length(img[,1])
+  
+  gImg = zeros(row, col)
+  
+  rightImg = img[2:row,]
+  leftImg = img[1:(row-1),]
+  bottomImg = img[,2:col]
+  upperImg = img[,1:(col-1)]
+  
+  index <- 1:(row-1)
+  gImg[index,] <- abs(img[index,] - rightImg)
+  
+  index <- 2:row
+  gImg[index,] <- gImg[index,] + abs(img[index,] - leftImg)
+  
+  index <- 1:(col-1)
+  gImg[,index] <- gImg[,index] + abs(img[,index] - bottomImg)
+  
+  index <- 2:col
+  gImg[,index] <- gImg[,index] + abs(img[,index] - upperImg)
+  
+  gImg[1,1] <- gImg[1,1]/2
+  gImg[row,1] <- gImg[row,1]/2
+  gImg[1,col] <- gImg[1,col]/2
+  gImg[row,col] <- gImg[row,col]/2
+  
+  gImg[1,2:(col-1)] <- gImg[1,2:(col-1)]/3
+  gImg[row,2:(col-1)] <- gImg[row,2:(col-1)]/3
+  gImg[2:(row-1),1] <- gImg[2:(row-1),1]/3
+  gImg[2:(row-1),col] <- gImg[2:(row-1),col]/3
+  
+  gImg[2:(row-1),2:(col-1)] <- gImg[2:(row-1),2:(col-1)]/4
+  
+  return(gImg)
+}
+
+fixFaces <- function(fromDir){
+  
+  imageFiles <- dir(concatenate(list(fromDir, "images/")))
+  faceFiles <- dir(concatenate(list(fromDir, "dats/")))
+  
+  M <- length(imageFiles)
+  
+  for(i in 1:M){
+    
+    face <- readImageData(concatenate(list(fromDir, "dats/", faceFiles[i])))
+    
+    face <- outlierRemoval(face)
+    face <- holeCorrection(face)
+    
+    write(t(face), concatenate(list(fromDir, "dats/", faceFiles[i])), ncolumns = length(face[1,]))
+    my.writeJPEG(face, concatenate(list(fromDir, "images/", imageFiles[i])))
+    
+    cat(i*100/M, "%\n")
+  }
+}
+
 read.surfKeyPoints <- function(file){
   
   kpLines <- strsplit(readLines(file), " ")

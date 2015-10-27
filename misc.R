@@ -662,3 +662,23 @@ list.find <- function(l, x){
   
   return(0)
 }
+
+zeros <- function(d1,d2=0){
+  
+  if(d2 == 0){
+    
+    return(rep(0,d1))
+  }
+  else{
+    
+    return(matrix(rep(0,d1*d2), nrow=d1))
+  }
+}
+
+index2colrow <- function(k, row, col){
+  
+  R <- ceiling(k/col)
+  C <- k - (R-1)*col
+  
+  return(c(R,C))
+}

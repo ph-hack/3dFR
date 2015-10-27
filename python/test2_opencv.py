@@ -8,9 +8,14 @@ Created on Mon Sep 14 18:24:14 2015
 import cv2, os
 import matplotlib.pyplot as plt
 import numpy as np
+import sys
 
-path = '/home/hick/Documents/Mestrado/Research/Code/Experiments6/unholed/'
-toPath = '/home/hick/Documents/Mestrado/Research/Code/Experiments6/surf_data/'
+
+
+#path = '/home/hick/Documents/Mestrado/Research/Code/Experiments6/unholed/'
+#toPath = '/home/hick/Documents/Mestrado/Research/Code/Experiments6/surf_data/'
+path = sys.argv[1]
+toPath = sys.argv[2]
 
 surf = cv2.xfeatures2d.SURF_create(50)
 
@@ -37,31 +42,7 @@ for root, dirs, files in os.walk(path):
 
                 i += 1
             
-            np.savetxt(toPath + file + '_kp.txt', coords, '%d')
-            np.savetxt(toPath + file + '_desc.txt', desc, '%f')
+            np.savetxt(toPath + 'surf_kps/' + file + '_kp.txt', coords, '%d')
+            np.savetxt(toPath + 'surf_features/' + file + '_desc.txt', desc, '%f')
 
             print 'saving ', file, ' data'
-
-#print desc, len(desc)
-#print kp, len(kp)
-            
-
-#img = np.loadtxt(path + '04201d434.unholed.jpg.dat')
-#img2 = cv2.imread(path + '04201d434.unholed.jpg')
-
-#i = 0
-#
-#for p in kp:
-#    
-#    x = np.int(p.pt[0])
-#    y = np.int(p.pt[1])
-#    coords[i,:] = (x,y)
-#    
-#    cv2.circle(img2, (x,y), 4, (255,0,0), 1)
-#    
-#    i = i + 1
-#    
-#np.savetxt(path + 'keyPoints.txt', coords, '%d')
-#
-#plt.imshow(img2)
-#plt.show()
