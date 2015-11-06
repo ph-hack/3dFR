@@ -12,8 +12,8 @@ import sys
 
 
 
-#path = '/home/hick/Documents/Mestrado/Research/Code/Experiments6/unholed/'
-#toPath = '/home/hick/Documents/Mestrado/Research/Code/Experiments6/surf_data/'
+#path = '/home/hick/Documents/Mestrado/Research/Code/Experiments6/meanFaces/images/'
+#toPath = '/home/hick/Documents/Mestrado/Research/Code/Experiments6/meanFaces/'
 path = sys.argv[1]
 toPath = sys.argv[2]
 
@@ -21,6 +21,8 @@ surf = cv2.xfeatures2d.SURF_create(50)
 
 for root, dirs, files in os.walk(path):
     
+    print len(files), ' files'
+
     for file in files:
         
         if file.endswith('.jpg'):

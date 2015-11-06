@@ -1,5 +1,124 @@
+classify <- function(galleryFolder="meanFaces/", probeFolder="faces/", curvesFolder="curves/", kpsFolder="kps/", 
+                     saliencyFolder="saliency/", surf_kpsFolder="surf_kps/", surf_featuresFolder="surf_features/",
+                     probeIndex=NULL, top=10){
+  
+  setwd(galleryFolder)
+  gCurvesFiles <- concatenate(list(galleryFolder, curvesFolder, dir(curvesFolder)))
+  gKpsFiles <- concatenate(list(galleryFolder, kpsFolder, dir(kpsFolder)))
+  gSurf_featuresFiles <- concatenate(list(galleryFolder, surf_featuresFolder, dir(surf_featuresFolder)))
+  gSurf_kpsFiles <- concatenate(list(galleryFolder, surf_kpsFolder, dir(surf_kpsFolder)))
+  saliencyFiles <- concatenate(list(galleryFolder, saliencyFolder, dir(saliencyFolder)))
+
+  setwd("../")
+  setwd(probeFolder)
+  pCurvesFiles <- concatenate(list(probeFolder, curvesFolder, dir(curvesFolder)))
+  pKpsFiles <- concatenate(list(probeFolder, kpsFolder, dir(kpsFolder)))
+  pSurf_featuresFiles <- concatenate(list(probeFolder, surf_featuresFolder, dir(surf_featuresFolder)))
+  pSurf_kpsFiles <- concatenate(list(probeFolder, surf_kpsFolder, dir(surf_kpsFolder)))
+  
+  if(!is.null(probeIndex)){
+    
+    pCurvesFiles <- pCurvesFiles[probeIndex]
+    pKpsFiles <- pKpsFiles[probeIndex]
+    pSurf_featuresFiles <- pSurf_featuresFiles[probeIndex]
+    pSurf_kpsFiles <- pSurf_kpsFiles[probeIndex]
+  }
+  
+  setwd("../")
+  
+  gClasses <- getClassFromFiles(files=gCurvesFiles)
+  pClasses <- getClassFromFiles(files=pCurvesFiles)
+  
+  Mg <- length(gCurvesFiles)
+  Mp <- length(pCurvesFiles)
+  
+  correct <- 0
+  
+  for(p in 1:Mp){
+    
+    galleryErrors <- rep(0, Mg)
+    
+    pCurves <- readMainLines(pCurvesFiles[p], "list")
+    pKpsIdx <- read.surfKeyPoints(pKpsFiles[p])
+    pSurf_features <- read.surfKeyPoints(pSurf_featuresFiles[p])
+    pSurf_kps <- read.surfKeyPoints(pSurf_kpsFiles[p])
+    
+    for(g in 1:Mg){
+      
+      gCurves <- readMainLines(gCurvesFiles[g], "list")
+      gKpsIdx <- read.surfKeyPoints(gKpsFiles[g])
+      gSurf_features <- read.surfKeyPoints(gSurf_featuresFiles[g])
+      gSurf_kps <- read.surfKeyPoints(gSurf_kpsFiles[g])
+      saliencies <- read.saliency(saliencyFiles[g])
+      
+      matches <- computeMatches(pSurf_features, gSurf_features)
+      
+      if(length(matches) > 0){
+        
+        matchPairs <- computeMatchesPairs(pSurf_kps, gSurf_kps, matches)
+        filteredPairs <- ransac(matchPairs$coords, geoTransformModel, geoTransformDistance, linearGeoTransform,
+                                0.07, minInitialSamples = 1, maxIter = 20)
+        
+        #keeps the indexes of the curves with matches
+        #curvesIdx <- getMatchCurvesIdx(matchPairs$idx, kpsIdx, otherKpsIdx)
+        curvesIdx <- getMatchCurvesIdx(matchPairs$idx[filteredPairs], pKpsIdx, gKpsIdx)
+        
+        if(length(curvesIdx) > 0){
+          #computes the distances
+          errors <- mapply(function(idx, curves, oCurves){
+            
+            return(my.p2p.dist(curves[[idx[[1]]]], oCurves[[idx[[2]]]], smooth = 2)$error)
+            
+          }, curvesIdx, MoreArgs = list(curves=pCurves, oCurves=gCurves))
+          
+          #stores the errors for the correct curves
+          pIndexes <- list2vector(getAllFieldFromList(curvesIdx, 1, 2))
+          gIndexes <- list2vector(getAllFieldFromList(curvesIdx, 2, 2))
+          ek <- 1
+          E <- rep(0, length(gIndexes))
+          for(k in gIndexes){
+            
+            weibull <- dweibull(saliencies[[k]], 1.5)
+            thau <- saliencies[[k]][which.max(weibull)]
+            E[ek] <- errors[ek]/(errors[ek] + thau)
+            ek <- ek + 1
+          }
+          
+          sortedE <- sort(E)
+          
+          gTop <- min(top, length(sortedE))
+          galleryErrors[g] <- mean(sortedE[1:gTop])
+        }
+      }
+      
+      cat("testing sample", getFaceID(pCurvesFiles[p]), ":", g*100/Mg, "%\n")
+    }
+    
+    gx <- which.min(galleryErrors)
+    gClass <- gClasses$fileClasses[gx]
+    
+    if(gClass == pClasses$fileClasses[p]){
+      
+      correct <- correct + 1
+      cat("Found!\n")
+    }
+    else{
+      
+      cat("Missed!\n")
+    }
+    
+    cat("g = ", gClass, " | p = ", getFaceID(pCurvesFiles[p]), " | error =", galleryErrors[gx], "\n")
+  }
+  
+  return(correct/Mp)
+}
+
+matchFaces <- function(matchesIdx, c1, c2, saliencies){
+  
+}
+
 computeGalleryCurveSaliency <- function(curvesFolder="curves/", kpsFolder="kps/", surf_featuresFolder="surf_features/",
-                                        surf_kpsFolder="surf_kps/", saliencyToFolder="saliency/"){
+                                        surf_kpsFolder="surf_kps/", saliencyToFolder="saliency/", indexes=NULL){
   
   curvesFiles <- concatenate(list(curvesFolder, dir(curvesFolder)))
   kpsFiles <- concatenate(list(kpsFolder, dir(kpsFolder)))
@@ -13,7 +132,15 @@ computeGalleryCurveSaliency <- function(curvesFolder="curves/", kpsFolder="kps/"
   
   saliencies <- list()
   
-  for(m in 1:M){
+  if(is.null(indexes)){
+    
+    indexes = 1:M
+  }
+  else{
+    
+  }
+  
+  for(m in indexes){
     
     sampleName <- getFaceID(curvesFiles[m])
     
@@ -81,17 +208,55 @@ computeGalleryCurveSaliency <- function(curvesFolder="curves/", kpsFolder="kps/"
           #cat("almost")
         }
       }
+      
+      cat("comparing for file", m, ":", i*100/M2, "%\n")
     }
     
     saliencies[[m]] <- errorMatrix
     
     file <- concatenate(list(saliencyToFolder, sampleName, ".saliency.dat"))
+    
+#     maxError <- 0
+#     minError <- 10000
+#     for(i in 1:N){
+#       
+#       if(length(errorMatrix[[i]]) == 1 && errorMatrix[[i]] == 0){
+#         
+#         errorMatrix[i] <- list(NULL)
+#       }
+#       
+#       if(!is.null(errorMatrix[[i]])){
+#         
+#         maxTemp <- max(list2vector(errorMatrix[[i]]))
+#         minTemp <- min(list2vector(errorMatrix[[i]]))
+#         
+#         if(maxError < maxTemp){
+#           maxError <- maxTemp
+#         }
+#         
+#         if(minError > minTemp){
+#           minError <- minTemp
+#         }
+#       }
+#     }
+    
+    write(c(), file, 1, append = FALSE)
+    
     for(i in 1:N){
       
-      if(!is.null(errorMatrix[[i]])){
+      if(length(errorMatrix[[i]]) == 1 && errorMatrix[[i]] == 0){
+        
+        errorMatrix[i] <- list(NULL)
+      }
+      
+      if(is.null(errorMatrix[[i]])){
+        
+        #write(maxError + minError, file, 1, TRUE, " ")
+        write(1, file, 1, TRUE, " ")
+      }
+      else{
         
         n <- length(errorMatrix[[i]])
-        write(i, file, 1, TRUE)
         write(list2vector(errorMatrix[[i]]), file, n, TRUE, " ")
       }
     }
@@ -108,25 +273,13 @@ read.saliency <- function(file){
   N <- length(lines)
   
   saliencies <- list()
-  idx <- list()
-  i <- 1
-  index <- 1
-  while(i <= N){
+  
+  for(i in 1:N){
     
-    idx[[index]] <- as.numeric(lines[i])
-    i <- i + 1
-    saliencies[[index]] <- as.numeric(strsplit(lines[[i]], " ")[[1]])
-    i <- i + 1
-    index <- index + 1
+    saliencies[[i]] <- as.numeric(strsplit(lines[[i]], " ")[[1]])
   }
   
-  if(saliencies[[index-1]] == 0){
-    
-    saliencies <- saliencies[-(index-1)]
-    idx <- idx[-(index-1)]
-  }
-  
-  return(list(saliencies=saliencies, idxs=idx))
+  return(saliencies[-1])
 }
 
 ## Eliminates the matches whose members are not in idx ####
@@ -203,9 +356,19 @@ my.p2p.dist <- function(reference, target, smooth=0, isOpt=TRUE){
   reference <- takeNoneFaceOut(reference, TRUE)
   target <- takeNoneFaceOut(target, TRUE)
   
-  distances <- dist.p2p(reference, target, isOpt)
-  #computes the mean error
-  error <- mean(abs(distances[,2]))
+  distances <- 0
+  error <- 0
+  
+  if(commonDomain(reference, target, isOpt) > 0){
+    
+    distances <- dist.p2p(reference, target, isOpt)
+    #computes the mean error
+    error <- mean(abs(distances[,2]))
+  }
+  else{
+    
+    error <- 1
+  }
   
   return(list(error=error, distance=sum(abs(distances)), size=min(length(reference[,1]), length(target[,1]))))
 }
@@ -297,6 +460,11 @@ getCurvesFromSample <- function(coordsfile, facefile, threshold=45, coordsToFold
       index <- index + 1
     }
     
+    if(length(which(curve > 0)) < threshold){
+      removed[[rIndex]] <- i
+      rIndex <- rIndex + 1
+    }
+    
     curves[[cIndex]] <- curve
     cIndex <- cIndex + 1
   }
@@ -313,6 +481,8 @@ getCurvesFromSample <- function(coordsfile, facefile, threshold=45, coordsToFold
   for(i in 1:M){
     write(Res[["coords"]][[i]], concatenate(c(coordsToFolder, name, ".coords.dat")), sep = " ", append = TRUE, ncolumns = 2)
     N <- length(Res[["curves"]][[i]])
+    maxV <- max(Res[["curves"]][[i]])
+    Res[["curves"]][[i]] <- Res[["curves"]][[i]]/maxV
     write(Res[["curves"]][[i]], concatenate(c(faceToFolder, name, ".curves.dat")), sep = " ", append = TRUE, ncolumns = N)
   }
   

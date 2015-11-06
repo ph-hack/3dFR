@@ -8,9 +8,79 @@ computeMeanFaces <- function(fromDir, toDir){
   files <- dir(fromDir)
   classes <- getClassFromFiles(fromDir)
   
-  M <- length(files)
+  N <- length(classes$classes)
   
+  i <- 1
   
+  for(class in classes$classes){
+    
+    thisClassFiles <- concatenate(list(fromDir, files[which(classes$fileClasses == class)]))
+    
+    faces <- lapply(thisClassFiles, readImageData)
+    faces <- matrixList2array(faces)
+    
+    k <- length(thisClassFiles)
+    
+    #meanFace <- sum.matrix(faces)/k
+    meanFace <- smartMean(faces)
+    
+    my.writeJPEG(meanFace, concatenate(list(toDir, "images/", class, "d000.jpg")))
+    write(meanFace, concatenate(list(toDir, "dats/", class, "d000.jpg.dat")), ncolumns = length(meanFace[1,]))
+    
+    cat(i*100/N, "%\n")
+    i <- i + 1
+  }
+}
+
+smartMean <- function(x, th=0.98){
+  
+  d <- dim(x)
+  n <- length(d)
+  
+  v <- apply(x, c(1,2), sd)
+  #v <- array(rep(v, d[3]), d)
+  m <- apply(x, c(1,2), mean)
+  #m <- array(rep(m, d[3]), d)
+  
+#   M <- mapply(function(x,m,v){
+#     
+#     idx <- which(x <= m + v & x > m - v)
+#     
+#     if(length(idx) > 0)
+#       return(mean(x[idx]))
+#     else
+#       return(m)
+#     
+#   }, x, m, v, SIMPLIFY = "array")
+  
+  mIdx <- apply(x, 3, function(x, m, v){
+    
+    idx <- which(x <= m + v & x >= m - v)
+    return(length(idx) >= length(x)*th)
+    
+  }, m, v)
+  
+  if(length(which(mIdx)) > 0)
+    M <- apply(x[,,which(mIdx)], c(1,2), mean)
+  else
+    M <- x[,,1]
+  
+#   M <- matrix(rep(0,d[1]*d[2]), ncol=d[2])
+#   
+#   for(i in 1:d[1]){
+#     
+#     for(j in 1:d[2]){
+#       
+#       idx <- which(x[i,j,] <= m[i,j] + v[i,j] & x[i,j,] >= m[i,j] - v[i,j] & mIdx)
+#       
+#       if(length(idx) > 0 || length(idx)/d[3] >= th)
+#         M[i,j] <- mean(x[i,j,idx])
+#       else
+#         M[i,j] <- 0
+#     }
+#   }
+  
+  return(M)
 }
 
 outlierRemoval <- function(img){

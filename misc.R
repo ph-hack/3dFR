@@ -682,3 +682,32 @@ index2colrow <- function(k, row, col){
   
   return(c(R,C))
 }
+
+sum.matrix <- function(l){
+  
+  m = l[[1]]
+  d = dim(m)
+  
+  S = Reduce(function(y,x){
+    
+    return(y + x)
+    
+  }, l, zeros(d[1], d[2]))
+  
+  return(S)
+}
+
+matrixList2array <- function(l){
+  
+  m = l[[1]]
+  N <- length(l)
+  d = dim(m)
+  M <- array(rep(0, d[1]*d[2]*N), c(d[1],d[2],N))
+  
+  for(i in 1:N){
+    
+    M[,,i] <- l[[i]]
+  }
+  
+  return(M)
+}
