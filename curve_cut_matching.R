@@ -1,6 +1,6 @@
 classify <- function(galleryFolder="meanFaces/", probeFolder="faces/", curvesFolder="curves/", kpsFolder="kps/", 
                      saliencyFolder="saliency/", surf_kpsFolder="surf_kps/", surf_featuresFolder="surf_features/",
-                     probeIndex=NULL, top=10){
+                     probeIndex=NULL, top=10, minCurves=5){
   
   setwd(galleryFolder)
   gCurvesFiles <- concatenate(list(galleryFolder, curvesFolder, dir(curvesFolder)))
@@ -34,9 +34,13 @@ classify <- function(galleryFolder="meanFaces/", probeFolder="faces/", curvesFol
   
   correct <- 0
   
+  saliencyFactor <- getNormalizationFactorOfSaliencies(concatenate(list(galleryFolder, saliencyFolder)))
+  
   for(p in 1:Mp){
     
-    galleryErrors <- rep(0, Mg)
+    #galleryErrors <- rep(0, Mg)
+    galleryErrors <- list()
+    galleryErrors[[Mg]] <- list()
     
     pCurves <- readMainLines(pCurvesFiles[p], "list")
     pKpsIdx <- read.surfKeyPoints(pKpsFiles[p])
@@ -63,7 +67,7 @@ classify <- function(galleryFolder="meanFaces/", probeFolder="faces/", curvesFol
         #curvesIdx <- getMatchCurvesIdx(matchPairs$idx, kpsIdx, otherKpsIdx)
         curvesIdx <- getMatchCurvesIdx(matchPairs$idx[filteredPairs], pKpsIdx, gKpsIdx)
         
-        if(length(curvesIdx) > 0){
+        if(length(curvesIdx) >= minCurves){
           #computes the distances
           errors <- mapply(function(idx, curves, oCurves){
             
@@ -78,6 +82,12 @@ classify <- function(galleryFolder="meanFaces/", probeFolder="faces/", curvesFol
           E <- rep(0, length(gIndexes))
           for(k in gIndexes){
             
+            if(length(saliencies[[k]]) == 1 && saliencies[[k]] == 1){
+              
+              saliencies[[k]] = saliencyFactor + 0.1
+              cat("saliency = 1, new value:", saliencies[[k]], ", for curve", k, "of gallery", g, "\n")
+            }
+            
             weibull <- dweibull(saliencies[[k]], 1.5)
             thau <- saliencies[[k]][which.max(weibull)]
             E[ek] <- errors[ek]/(errors[ek] + thau)
@@ -86,18 +96,66 @@ classify <- function(galleryFolder="meanFaces/", probeFolder="faces/", curvesFol
           
           sortedE <- sort(E)
           
-          gTop <- min(top, length(sortedE))
-          galleryErrors[g] <- mean(sortedE[1:gTop])
+          #gTop <- min(top, length(sortedE))
+          #galleryErrors[g] <- mean(sortedE[1:gTop])
+          galleryErrors[[g]] <- sortedE
+          #cat("Error for gallery", gClasses$fileClasses[g], ":", galleryErrors[g])
+          #galleryErrors[g] <- galleryErrors[g] + galleryErrors[g]/gTop
+          #cat("->", galleryErrors[g], "\n")
+          
+          cat("number of matched curves:", length(E),"\n")
+        }
+        else{
+          
+          cat("Number of curves matched insuficientfor gallery", g,":", length(curvesIdx), "curves -----\n")
+          galleryErrors[[g]] <- 1
         }
       }
+      else{
+        
+        cat("No matching returned for gallery", g, "\n")
+        return(-1)
+      }
       
-      cat("testing sample", getFaceID(pCurvesFiles[p]), ":", g*100/Mg, "%\n")
+      cat("testing sample", getFaceID(pCurvesFiles[p]), "with gallary", gClasses$fileClasses[g], ":", g*100/Mg, "%\n")
     }
+    
+    errorsSize <- mapply(function(x){
+      
+      return(length(x))
+      
+    }, galleryErrors, SIMPLIFY = "vector")
+    
+    gTop <- min(errorsSize[which(errorsSize > 1)])
+    
+#     gTop <- 10
+#     for(g in 1:Mg){
+#       
+#       s <- length(galleryErrors[[g]])
+#       if(s >= minCurves && s < gTop){
+#         
+#         gTop <- s
+#       }
+#     }
+    
+    if(gTop < minCurves){
+      
+      gTop <- minCurves
+    }
+    
+    galleryErrors <- mapply(function(x, n){
+      
+      n <- min(n, length(x))
+      Res <- mean(x[1:n])
+      return(Res)
+      
+    }, galleryErrors, MoreArgs = list(n = gTop), SIMPLIFY = "vector")
     
     gx <- which.min(galleryErrors)
     gClass <- gClasses$fileClasses[gx]
+    pClass <- pClasses$fileClasses[p]
     
-    if(gClass == pClasses$fileClasses[p]){
+    if(gClass == pClass){
       
       correct <- correct + 1
       cat("Found!\n")
@@ -105,6 +163,8 @@ classify <- function(galleryFolder="meanFaces/", probeFolder="faces/", curvesFol
     else{
       
       cat("Missed!\n")
+      gCorrect <- which(gClasses$fileClasses == pClass)
+      cat("error for class", pClass, ":", galleryErrors[gCorrect],"\n")
     }
     
     cat("g = ", gClass, " | p = ", getFaceID(pCurvesFiles[p]), " | error =", galleryErrors[gx], "\n")
@@ -115,6 +175,35 @@ classify <- function(galleryFolder="meanFaces/", probeFolder="faces/", curvesFol
 
 matchFaces <- function(matchesIdx, c1, c2, saliencies){
   
+}
+
+getNormalizationFactorOfSaliencies <- function(folder="meanFaces/saliency/", verbose=0){
+  
+  files <- dir(folder)
+  N <- length(files)
+  
+  maxS <- 0
+  
+  for(i in 1:N){
+    
+    saliencies <- read.saliency(concatenate(list(folder, files[i])))
+    
+    saliencies <- Reduce(merge.list, saliencies, list())
+    saliencies <- list2vector(saliencies)
+    maxTemp <- max(saliencies[which(saliencies != 1)])
+    
+    if(maxTemp > maxS){
+      
+      maxS <- maxTemp
+    }
+    
+    if(verbose > 0){
+      
+      cat("reading...", i*100/N, "%\n")
+    }
+  }
+  
+  return(maxS)
 }
 
 computeGalleryCurveSaliency <- function(curvesFolder="curves/", kpsFolder="kps/", surf_featuresFolder="surf_features/",
