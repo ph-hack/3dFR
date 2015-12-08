@@ -22,7 +22,7 @@ computeMeanFaces <- function(fromDir, toDir){
     k <- length(thisClassFiles)
     
     #meanFace <- sum.matrix(faces)/k
-    meanFace <- smartMean(faces)
+    meanFace <- smartMean2(faces)
     
     my.writeJPEG(meanFace, concatenate(list(toDir, "images/", class, "d000.jpg")))
     write(meanFace, concatenate(list(toDir, "dats/", class, "d000.jpg.dat")), ncolumns = length(meanFace[1,]))
@@ -81,6 +81,28 @@ smartMean <- function(x, th=0.98){
 #   }
   
   return(M)
+}
+
+smartMean2 <- function(x, th=0.98){
+  
+  d <- dim(x)
+  n <- length(d)
+  
+  m <- apply(x, c(1,2), mean)
+  
+  dif <- apply(x, 3, function(x, m){
+    
+    return(abs(x - m))
+    
+  }, m)
+  
+  dis <- apply(dif, 2, mean)
+  
+  repIdx <- which.min(dis)
+  
+  rep <- x[,,repIdx]
+  
+  return(rep)
 }
 
 outlierRemoval <- function(img){

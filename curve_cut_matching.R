@@ -1,12 +1,13 @@
 classify <- function(galleryFolder="meanFaces/", probeFolder="faces/", curvesFolder="curves/", kpsFolder="kps/", 
                      saliencyFolder="saliency/", surf_kpsFolder="surf_kps/", surf_featuresFolder="surf_features/",
-                     probeIndex=NULL, top=10, minCurves=5){
+                     probeIndex=NULL, top=10, minCurves=5, faceFolder="images/"){
   
   setwd(galleryFolder)
   gCurvesFiles <- concatenate(list(galleryFolder, curvesFolder, dir(curvesFolder)))
   gKpsFiles <- concatenate(list(galleryFolder, kpsFolder, dir(kpsFolder)))
   gSurf_featuresFiles <- concatenate(list(galleryFolder, surf_featuresFolder, dir(surf_featuresFolder)))
   gSurf_kpsFiles <- concatenate(list(galleryFolder, surf_kpsFolder, dir(surf_kpsFolder)))
+  gImagesFiles <- concatenate(list(galleryFolder, faceFolder, dir(faceFolder)))
   saliencyFiles <- concatenate(list(galleryFolder, saliencyFolder, dir(saliencyFolder)))
 
   setwd("../")
@@ -15,6 +16,7 @@ classify <- function(galleryFolder="meanFaces/", probeFolder="faces/", curvesFol
   pKpsFiles <- concatenate(list(probeFolder, kpsFolder, dir(kpsFolder)))
   pSurf_featuresFiles <- concatenate(list(probeFolder, surf_featuresFolder, dir(surf_featuresFolder)))
   pSurf_kpsFiles <- concatenate(list(probeFolder, surf_kpsFolder, dir(surf_kpsFolder)))
+  pImagesFiles <- concatenate(list(probeFolder, faceFolder, dir(faceFolder)))
   
   if(!is.null(probeIndex)){
     
@@ -22,6 +24,7 @@ classify <- function(galleryFolder="meanFaces/", probeFolder="faces/", curvesFol
     pKpsFiles <- pKpsFiles[probeIndex]
     pSurf_featuresFiles <- pSurf_featuresFiles[probeIndex]
     pSurf_kpsFiles <- pSurf_kpsFiles[probeIndex]
+    pImagesFiles <- pImagesFiles[probeIndex]
   }
   
   setwd("../")
@@ -35,6 +38,7 @@ classify <- function(galleryFolder="meanFaces/", probeFolder="faces/", curvesFol
   correct <- 0
   
   saliencyFactor <- getNormalizationFactorOfSaliencies(concatenate(list(galleryFolder, saliencyFolder)))
+  cat("saliency factor =", saliencyFactor, "\n")
   
   for(p in 1:Mp){
     
@@ -67,11 +71,16 @@ classify <- function(galleryFolder="meanFaces/", probeFolder="faces/", curvesFol
         #curvesIdx <- getMatchCurvesIdx(matchPairs$idx, kpsIdx, otherKpsIdx)
         curvesIdx <- getMatchCurvesIdx(matchPairs$idx[filteredPairs], pKpsIdx, gKpsIdx)
         
+        gFace <- readJPEG(gImagesFiles[g])
+        pFace <- readJPEG(pImagesFiles[p])
+        drawMatches(matchPairs, filteredPairs, curvesIdx, pSurf_kps, gSurf_kps, pKpsIdx, gKpsIdx, pFace, gFace)
+        
         if(length(curvesIdx) >= minCurves){
           #computes the distances
           errors <- mapply(function(idx, curves, oCurves){
             
-            return(my.p2p.dist(curves[[idx[[1]]]], oCurves[[idx[[2]]]], smooth = 2)$error)
+            #return(my.p2p.dist(curves[[idx[[1]]]], oCurves[[idx[[2]]]], smooth = 2)$error)
+            return(my.dtwBasedDistance2(curves[[idx[[1]]]], oCurves[[idx[[2]]]], smooth=5, range=20, tol=10)$error)
             
           }, curvesIdx, MoreArgs = list(curves=pCurves, oCurves=gCurves))
           
@@ -84,7 +93,7 @@ classify <- function(galleryFolder="meanFaces/", probeFolder="faces/", curvesFol
             
             if(length(saliencies[[k]]) == 1 && saliencies[[k]] == 1){
               
-              saliencies[[k]] = saliencyFactor + 0.1
+              saliencies[[k]] = saliencyFactor + 0.0001
               cat("saliency = 1, new value:", saliencies[[k]], ", for curve", k, "of gallery", g, "\n")
             }
             
@@ -142,18 +151,45 @@ classify <- function(galleryFolder="meanFaces/", probeFolder="faces/", curvesFol
       
       gTop <- minCurves
     }
+
+    pClass <- pClasses$fileClasses[p]
+    
+    idealTop <- minCurves
+    
+    for(gt in minCurves:top){
+      
+      correctG <- which(gClasses$fileClasses == pClass)
+      
+      galleryErrorsTemp <- mapply(function(x, n){
+        
+        N <- length(x)
+        n <- min(n, N)
+        Res <- mean(x[1:n]) #+ 1/N
+        return(Res)
+        
+      }, galleryErrors, MoreArgs = list(n = gt), SIMPLIFY = "vector")
+      
+      gx <- which.min(galleryErrorsTemp)
+      
+      if(gx == correctG){
+        
+        idealTop <- gt
+      }
+    }
+    
+    cat("The ideal top is:", idealTop, ", and the current is:", gTop, "\n")
     
     galleryErrors <- mapply(function(x, n){
       
-      n <- min(n, length(x))
-      Res <- mean(x[1:n])
+      N <- length(x)
+      n <- min(n, N)
+      Res <- mean(x[1:n]) #+ 1/N
       return(Res)
       
     }, galleryErrors, MoreArgs = list(n = gTop), SIMPLIFY = "vector")
     
     gx <- which.min(galleryErrors)
     gClass <- gClasses$fileClasses[gx]
-    pClass <- pClasses$fileClasses[p]
     
     if(gClass == pClass){
       
@@ -175,6 +211,98 @@ classify <- function(galleryFolder="meanFaces/", probeFolder="faces/", curvesFol
 
 matchFaces <- function(matchesIdx, c1, c2, saliencies){
   
+}
+
+drawMatches <- function(matchPairs, filteredPairs, curvesIdx, pkp, gkp, pkpsIdx, gkpsIdx, pface, gface){
+  
+  plot(c(0, 310), c(0,210), col="white")
+  
+  pface <- t(pface)
+  gface <- t(gface)
+  
+  pface <- mirrorImage(pface)
+  gface <- mirrorImage(gface)
+  
+  image(1:150, 1:210, pface, add=TRUE, col=gray.colors(256))
+  image(161:310, 1:210, gface, add=TRUE, col=gray.colors(256))
+  
+  for(p in 1:(length(pkp[,1]))){
+    
+    points(pkp[p,1], pkp[p,2], col="red")
+  }
+  
+  for(g in 1:(length(gkp[,1]))){
+    
+    points(gkp[g,1] + 160, gkp[g,2], col="red")
+  }
+  
+  for(m in matchPairs$coords[filteredPairs]){
+    
+    p11 <- m[[1]][1:2]
+    p12 <- m[[2]][1:2]
+    p21 <- m[[1]][3:4]
+    p22 <- m[[2]][3:4]
+    
+    lines(c(p11[1], p21[1] + 160), c(p11[2], p21[2]), col="blue")
+    lines(c(p12[1], p22[1] + 160), c(p12[2], p22[2]), col="blue")
+  }
+  
+  if(length(curvesIdx) > 0){
+    galleryCurves <- getAllFieldFromList(curvesIdx, 2, 2)
+    probeCurves <- getAllFieldFromList(curvesIdx, 1, 2)
+    
+    for(g in galleryCurves){
+      
+      gx <- gkpsIdx[g,]
+      p1 <- gkp[gx[1],]
+      p2 <- gkp[gx[2],]
+      lines(c(p1[1] + 160, p2[1] + 160), c(p1[2], p2[2]), col="orange")
+    }
+    
+    for(p in probeCurves){
+      
+      px <- pkpsIdx[p,]
+      p1 <- pkp[px[1],]
+      p2 <- pkp[px[2],]
+      lines(c(p1[1], p2[1]), c(p1[2], p2[2]), col="orange")
+    }
+  }
+}
+
+mirrorImage <- function(img, direction=2){
+  
+  d <- 0
+  
+  if(direction == 2){
+    
+    d <- floor(length(img[1,])/2)
+  }
+  else{
+    
+    d <- floor(length(img[,1])/2)
+  }
+  
+  for(i in 1:d){
+    
+    if(direction == 2){
+      
+      oppositeIdx <- length(img[1,])-(i-1)
+      opposite <- img[,oppositeIdx]
+      
+      img[,oppositeIdx] <- img[,i]
+      img[,i] <- opposite
+    }
+    else{
+      
+      oppositeIdx <- length(img[,1])-(i-1)
+      opposite <- img[oppositeIdx,]
+      
+      img[oppositeId,] <- img[i,]
+      img[i,] <- opposite
+    }
+  }
+  
+  return(img)
 }
 
 getNormalizationFactorOfSaliencies <- function(folder="meanFaces/saliency/", verbose=0){
@@ -277,7 +405,8 @@ computeGalleryCurveSaliency <- function(curvesFolder="curves/", kpsFolder="kps/"
           #computes the distances
           errors <- mapply(function(idx, curves, oCurves){
             
-            return(my.p2p.dist(curves[[idx[[1]]]], oCurves[[idx[[2]]]], smooth = 2)$error)
+            #return(my.p2p.dist(curves[[idx[[1]]]], oCurves[[idx[[2]]]], smooth = 2)$error)
+            return(my.dtwBasedDistance2(curves[[idx[[1]]]], oCurves[[idx[[2]]]], smooth=5, range=20, tol=10)$error)
             
           }, curvesIdx, MoreArgs = list(curves=curves, oCurves=otherCurves))
           
