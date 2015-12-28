@@ -1,4 +1,4 @@
-from numpy import array, zeros, argmin, inf, gradient, ones
+from numpy import array, zeros, argmin, inf, gradient, ones, mean
 from numpy.linalg import norm
 
 
@@ -34,7 +34,7 @@ def dtw(x, y, dist=lambda x, y: norm(x - y, ord=1)):
 
     dist = D[-1, -1] / sum(D.shape)
 
-    return dist, D, _trackeback(D)
+    return dist #, D, _trackeback(D)
 
 
 def _trackeback(D):
@@ -90,7 +90,7 @@ def dtw_gradient(x, y, n=10):
 
     dist = D[-1, -1] / sum(D.shape)
 
-    return dist, D, _trackeback(D)
+    return dist #, D, _trackeback(D)
 
 
 def gradient_dist(g1, g2, i1, i2, n=5):
@@ -110,3 +110,11 @@ def gradient_dist(g1, g2, i1, i2, n=5):
     d = abs(g1[slice(i1-l,i1+r)] - g2[slice(i2-l,i2+r)]) * w
 
     return sum(d)/sum(w)
+
+def p2p_dist(reference, target):
+
+    s = min(len(reference), len(target))
+
+    dif = abs(reference[:s] - target[:s])
+
+    return mean(dif)
