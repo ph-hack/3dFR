@@ -5,6 +5,7 @@ import scipy.stats as stats
 import cv2
 import os
 import matplotlib.pyplot as plt
+import copy as cp
 from distances import dtw, dtw_gradient, p2p_dist
 from unittest.case import TestCase
 from unittest.loader import TestLoader
@@ -70,6 +71,8 @@ def representant_curve(curves, distance='cosine'):
     return curves[rep_idx,:]
 
 def smooth(x, n):
+
+    x = cp.deepcopy(x)
 
     for i in range(0, len(x)):
 
@@ -175,10 +178,6 @@ def saliency(from_folder, distance, to_folder, curves_idx=range(0,11)):
 
         print 'file ', f
 
-            # with open(''.join([to_folder, 'saliency_', get_sample_id(files[f]), '.txt']), 'wb') as saliency_file:
-            #
-            #     saliency_file.write(dists)
-
 
 def remove_non_face(curve):
 
@@ -210,7 +209,7 @@ def remove_non_face(curve):
 
 class PreProcessorsTests(TestCase):
 
-    def test_01_read_curves(self):
+    def est_01_read_curves(self):
 
         curve_file = '/home/hick/Documents/Mestrado/Research/Code/Experiments5/training/02463d452.lines'
 
@@ -218,7 +217,7 @@ class PreProcessorsTests(TestCase):
 
         self.assertEqual(len(curve), 130)
 
-    def test_02_person_id(self):
+    def est_02_person_id(self):
 
         id = get_person_id('alsdf/asdfad/0200d345.lines')
 
@@ -253,7 +252,7 @@ class PreProcessorsTests(TestCase):
         # plt.imshow(D)
         # plt.show()
 
-    def test_04_smooth(self):
+    def est_04_smooth(self):
 
         f1 = '/home/hick/Documents/Mestrado/Research/Code/Experiments5/training/02463d452.lines'
         f2 = '/home/hick/Documents/Mestrado/Research/Code/Experiments5/training/02463d654.lines'
@@ -284,7 +283,7 @@ class PreProcessorsTests(TestCase):
         dist = dtw(c1,c3)
         print 'dtw: c1 x c3 = ', dist
 
-    def test_05_representant(self):
+    def est_05_representant(self):
 
         f1 = '/home/hick/Documents/Mestrado/Research/Code/Experiments5/training/02463d452.lines'
         f2 = '/home/hick/Documents/Mestrado/Research/Code/Experiments5/training/02463d654.lines'
@@ -328,14 +327,17 @@ class PreProcessorsTests(TestCase):
         #
         # plt.show()
 
-    def test_00_saliency(self):
+    def est_00_saliency(self):
 
         def d(x1, x2):
 
-            x1 = remove_non_face(x1)
-            x2 = remove_non_face(x2)
+            # x1 = remove_non_face(x1)
+            # x2 = remove_non_face(x2)
 
-            return dtw(x1, x2)
+            x1 = smooth(x1, 5)
+            x2 = smooth(x2, 5)
+
+            return dist.cosine(x1, x2)
 
         saliency('/home/hick/Documents/Mestrado/Research/Code/Experiments5/from_saliency/', d,
                  '/home/hick/Documents/Mestrado/Research/Code/Experiments5/saliency/')
@@ -343,7 +345,7 @@ class PreProcessorsTests(TestCase):
         plt.plot(range(0,5))
         plt.show()
 
-    def test_07_histogram(self):
+    def est_07_histogram(self):
 
         x = [5,7,2,2,4,6,7,8,54,4,3,2,3,4,6,7,7,4,3,3,2,2,3,4,5,6,7,8,9.34,5,3,2,2,45,6,7,65,4,3,22,3,4,5,6]
 
@@ -352,7 +354,7 @@ class PreProcessorsTests(TestCase):
         plt.plot(x,h)
         plt.show()
 
-    def test_08_weibull(self):
+    def est_08_weibull(self):
 
         data = np.array([22,12,3,4,43,23,56,43,23,58,29,39,47,9,89,78,98,78,83,37,29,34,33,25,37,24,27])
         h, x = np.histogram(data, 20)
@@ -364,7 +366,7 @@ class PreProcessorsTests(TestCase):
         plt.plot(weib_curve)
         plt.show()
 
-    def test_09_p2p(self):
+    def est_09_p2p(self):
 
         f1 = '/home/hick/Documents/Mestrado/Research/Code/Experiments5/training/02463d452.lines'
         f2 = '/home/hick/Documents/Mestrado/Research/Code/Experiments5/training/02463d654.lines'
@@ -404,7 +406,7 @@ class PreProcessorsTests(TestCase):
         dist = dtw_gradient(c1,c3)
         print 'dtwg: c1 x c3 = ', dist
 
-    def test_10_remove_non_face(self):
+    def est_10_remove_non_face(self):
 
         f1 = '/home/hick/Documents/Mestrado/Research/Code/Experiments5/training/02463d452.lines'
 

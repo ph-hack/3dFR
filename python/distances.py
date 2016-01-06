@@ -78,17 +78,63 @@ def dtw_gradient(x, y, n=10):
     D[0, 1:] = inf
     D[1:, 0] = inf
 
-    for i in range(r):
-        for j in range(c):
-            D[i+1, j+1] = gradient_dist(gx, gy, i, j, n)
+    # for i in range(r):
+    #     for j in range(c):
+    #         D[i+1, j+1] = gradient_dist(gx, gy, i, j, n)
+    #
+    # for i in range(r):
+    #     for j in range(c):
+    #         D[i+1, j+1] += min(D[i, j], D[i, j+1], D[i+1, j])
 
-    for i in range(r):
-        for j in range(c):
-            D[i+1, j+1] += min(D[i, j], D[i, j+1], D[i+1, j])
+    point_queue = [(1,1)]
+    D[1,1] = gradient_dist(gx, gy, 0, 0, n)
+    dist = 0 + D[1,1]
+    path = []
 
-    D = D[1:, 1:]
+    while len(point_queue) > 0:
 
-    dist = D[-1, -1] / sum(D.shape)
+        i,j = point_queue.pop(0)
+        path.append((i,j))
+
+        candidates = []
+
+        if j < c:
+            D[i,j+1] = gradient_dist(gx, gy, i-1, j, n)
+            candidates.append(D[i,j+1])
+        else:
+            candidates.append(D[i,c])
+
+        if i < r:
+            D[i+1,j] = gradient_dist(gx, gy, i, j-1, n)
+            candidates.append(D[i+1,j])
+        else:
+            candidates.append(D[r,j])
+
+        if i < r and j < c:
+            D[i+1,j+1] = gradient_dist(gx, gy, i, j, n)
+            candidates.append(D[i+1,j+1])
+        else:
+            candidates.append(D[r,c])
+
+        min_d = min(candidates)
+        dist += min_d
+
+        if j + 1 <= c and D[i,j+1] == min_d:
+
+            point_queue.append((i,j+1))
+
+        elif i + 1 <= r and D[i+1,j] == min_d:
+
+            point_queue.append((i+1,j))
+
+        elif i + 1 <= r and j + 1 <= c and D[i+1,j+1] == min_d:
+
+            point_queue.append((i+1,j+1))
+
+    #D = D[1:, 1:]
+
+    #print 'factor = ', (len(path) - min(r,c)), ' dist = ', dist, ' r = ', r, ' c = ', c, ' path = ', len(path)
+    dist = (len(path) - min(r,c) + 1) * dist / min(r,c)
 
     return dist #, D, _trackeback(D)
 
