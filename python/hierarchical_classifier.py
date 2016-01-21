@@ -52,6 +52,8 @@ class HierarchicalClassifier:
             node_queue = [self.root]
 
             candidates = {}
+            closestface = None
+            min_error = 100
 
             while(len(node_queue) > 0):
 
@@ -71,15 +73,24 @@ class HierarchicalClassifier:
                             if error < candidates[current_node.sample.person] \
                             else candidates[current_node.sample.person]
 
+                    if error < min_error:
+
+                        closestface = current_node.sample
+                        min_error = error
+
                 elif current_node.test(face):
 
                     node_queue.extend(current_node.children)
 
-            print '\ncandidates: ', candidates,
+            print '\ncandidates: ', candidates
 
             chosen = elect(candidates)
 
             decision.append(chosen[0])
+
+            # face.compare_show(closestface, measure=True)
+
+            print 'face ', str(face), ', closest ', str(closestface)
 
         return decision
 
@@ -287,6 +298,7 @@ class HierarchicalTests(TestCase):
         augmentations[0].add_function('noise', seed=2)
         augmentations.append(aug.Transformation())
         augmentations[1].add_function('noise', sigma=1)
+        augmentations[1].add_function('rotation', theta=4)
         augmentations.append(aug.Transformation())
         augmentations[2].add_function('noise', sigma=1.5, seed=3)
         augmentations.append(aug.Transformation())
@@ -294,7 +306,7 @@ class HierarchicalTests(TestCase):
 
         classifier = HierarchicalClassifier(top=6, distance=smoothed_cosine
                                             #, saliency_folder='/home/hick/Documents/Mestrado/Research/Code/Experiments5/saliency/'
-                                            )#,augmentations=augmentations)
+                                            ,augmentations=augmentations)
 
         classifier.fit(x_train, y_train)
 

@@ -11,6 +11,24 @@ from unittest.case import TestCase
 from unittest.loader import TestLoader
 from unittest.runner import TextTestRunner
 
+def load_data_split(train_path, test_path):
+
+    train_file = open(train_path, 'r')
+    test_file = open(test_path, 'r')
+
+    train = train_file.read()
+    test = test_file.read()
+
+    train = train.split('\n')
+    test = test.split('\n')
+
+    train = train[:-1]
+    test = test[:-1]
+
+    train = [get_sample_id(t) for t in train]
+    test = [get_sample_id(t) for t in test]
+
+    return train, test
 
 def read_curves(file_path, **kwargs):
 
@@ -48,7 +66,14 @@ def get_person_id(file_path):
 def get_sample_id(file_path):
 
     m = re.search('[0-9]+d[0-9]+', file_path)
-    name = m.group(0)
+
+    if m is None:
+
+        print 'Error in file ', file_path
+        name = 'error'
+
+    else:
+        name = m.group(0)
 
     return name
 
@@ -227,7 +252,7 @@ class PreProcessorsTests(TestCase):
 
         self.assertEqual(id, '0200d345')
 
-    def test_03_dtw(self):
+    def est_03_dtw(self):
 
         f1 = '/home/hick/Documents/Mestrado/Research/Code/Experiments5/training/02463d452.lines'
         f2 = '/home/hick/Documents/Mestrado/Research/Code/Experiments5/training/02463d654.lines'
@@ -423,6 +448,11 @@ class PreProcessorsTests(TestCase):
         plt.plot(c9, 'r-')
         plt.plot(c, 'g-')
         plt.show()
+
+    def test_00_get_data_split(self):
+
+        folder = '/home/hick/Documents/Mestrado/Research/Code/Experiments5/'
+        train, test = load_data_split(''.join([folder, 'trainingFiles.txt']), ''.join([folder, 'testFiles.txt']))
 
 
 if __name__ == '__main__':

@@ -1,8 +1,10 @@
 from unittest import TestLoader, TextTestRunner
 from unittest.case import TestCase
-from pre_processors import get_sample_id, get_person_id, read_curves, read_saliency
+import math
+from pre_processors import get_sample_id, get_person_id, read_curves, read_saliency, smooth
 from distances import dtw
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 class Face:
@@ -58,6 +60,38 @@ class Face:
 
         return self.id
 
+    def show(self, n=-1):
+
+        if n == -1:
+            n = len(self.curves)
+
+        r = int(math.ceil(n/2.))
+
+        for c in range(n):
+            ax = plt.subplot(2,r,c+1)
+            ax.plot(self.curves[c], 'k-')
+
+        plt.show()
+
+    def compare_show(self, other, n=-1, measure=False):
+
+        if n == -1:
+            n = len(self.curves)
+
+        r = int(math.ceil(n/2.))
+
+        for c in range(n):
+            ax = plt.subplot(2,r,c+1)
+            ax.plot(smooth(self.curves[c], 5), 'b-')
+            ax.plot(smooth(other.curves[c], 5), 'r-')
+
+            if measure:
+
+                error = self.metric(self.curves[c], other.curves[c])
+                ax.set_title(str(error))
+
+        plt.show()
+
 
 def stats_template():
 
@@ -80,7 +114,7 @@ def elect(candidates):
 
 class FaceTests(TestCase):
 
-    def test_01_faces(self):
+    def est_01_faces(self):
 
         f1 = Face('/home/hick/Documents/Mestrado/Research/Code/Experiments5/from_saliency/02463d452.lines',
                   saliency_folder='/home/hick/Documents/Mestrado/Research/Code/Experiments5/saliency/', top=5)
@@ -109,6 +143,17 @@ class FaceTests(TestCase):
         print 'f1 - f2 = ', error
         error = f1 - f3
         print 'f1 - f3 = ', error
+
+    def test_00_show(self):
+
+        f1 = Face('/home/hick/Documents/Mestrado/Research/Code/Experiments5/from_saliency/02463d452.lines', top=5)
+        f2 = Face('/home/hick/Documents/Mestrado/Research/Code/Experiments5/from_saliency/02463d456.lines', top=5)
+        f3 = Face('/home/hick/Documents/Mestrado/Research/Code/Experiments5/from_saliency/04202d350.lines', top=5)
+
+        f1.show()
+        f1.compare_show(f2)
+        f1.compare_show(f3)
+        f1.compare_show(f3, 1)
 
 
 if __name__ == '__main__':

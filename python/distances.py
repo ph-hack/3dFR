@@ -134,7 +134,8 @@ def dtw_gradient(x, y, n=10):
     #D = D[1:, 1:]
 
     #print 'factor = ', (len(path) - min(r,c)), ' dist = ', dist, ' r = ', r, ' c = ', c, ' path = ', len(path)
-    dist = (len(path) - min(r,c) + 1) * dist / min(r,c)
+    # dist = (len(path) - min(r,c) + 1) * dist / min(r,c)
+    dist = float(min(r,c))/len(path) * dist/min(r,c)
 
     return dist #, D, _trackeback(D)
 
