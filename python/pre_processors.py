@@ -2,7 +2,6 @@ import numpy as np
 import re
 import scipy.spatial.distance as dist
 import scipy.stats as stats
-import cv2
 import os
 import matplotlib.pyplot as plt
 import copy as cp
