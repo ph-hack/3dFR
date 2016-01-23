@@ -5,10 +5,39 @@ import scipy.stats as stats
 import os
 import matplotlib.pyplot as plt
 import copy as cp
+import random
 from distances import dtw, dtw_gradient, p2p_dist
 from unittest.case import TestCase
 from unittest.loader import TestLoader
 from unittest.runner import TextTestRunner
+
+def filter_training_set(train_x, train_y):
+
+    classes = set(train_y)
+    new_train_x = []
+
+    min_count = 1000
+
+    for c in classes:
+
+        k = train_y.count(c)
+
+        if k < min_count:
+
+            min_count = k
+
+    train_y = np.array(train_y)
+    train_x = np.array(train_x)
+
+    for c in classes:
+
+        x = np.where(train_y == c)[0]
+
+        random.seed(5)
+        filtered = [t for t in train_x[random.sample(x, min_count)]]
+        new_train_x.extend(filtered)
+
+    return new_train_x, min_count
 
 def load_data_split(train_path, test_path):
 
@@ -448,10 +477,19 @@ class PreProcessorsTests(TestCase):
         plt.plot(c, 'g-')
         plt.show()
 
-    def test_00_get_data_split(self):
+    def est_11_get_data_split(self):
 
         folder = '/home/hick/Documents/Mestrado/Research/Code/Experiments5/'
         train, test = load_data_split(''.join([folder, 'trainingFiles.txt']), ''.join([folder, 'testFiles.txt']))
+
+    def test_00_filter_train(self):
+
+        train_x = ['02463d001', '02463d002', '02463d003', '02463d004', '04201d001', '04201d002', '04201d003',
+                   '04202d001','04202d002', '04202d003', '04202d004', '04203d001', '04203d002']
+
+        train_y = [get_person_id(t) for t in train_x]
+
+        print filter_training_set(train_x, train_y)
 
 
 if __name__ == '__main__':
