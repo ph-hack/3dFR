@@ -11,6 +11,17 @@ from unittest.case import TestCase
 from unittest.loader import TestLoader
 from unittest.runner import TextTestRunner
 
+def filter_testing_set(test_x, classes):
+
+    new_test_x = []
+    for x in test_x:
+
+        if get_person_id(x) in classes:
+
+            new_test_x.append(x)
+
+    return new_test_x
+
 def filter_training_set(train_x, train_y):
 
     classes = set(train_y)
@@ -22,20 +33,24 @@ def filter_training_set(train_x, train_y):
 
         k = train_y.count(c)
 
-        if k < min_count:
+        if k < min_count:# and k >= 2:
 
             min_count = k
 
     train_y = np.array(train_y)
     train_x = np.array(train_x)
 
+    min_count = 1
+
     for c in classes:
 
         x = np.where(train_y == c)[0]
 
-        random.seed(5)
-        filtered = [t for t in train_x[random.sample(x, min_count)]]
-        new_train_x.extend(filtered)
+	if len(x) >= min_count:
+
+            random.seed(5)
+            filtered = [t for t in train_x[random.sample(x, min_count)]]
+            new_train_x.extend(filtered)
 
     return new_train_x, min_count
 

@@ -66,6 +66,9 @@ def dtw_gradient(x, y, n=10):
     :param func dist: distance used as cost measure (default L1 norm)
     Returns the minimum distance, the accumulated cost matrix and the wrap path.
     """
+    if len(x) == 0 or len(y) == 0:
+        return 10
+
     x = array(x)
     y = array(y)
 

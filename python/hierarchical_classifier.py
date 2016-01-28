@@ -44,6 +44,7 @@ class HierarchicalClassifier:
     def decision_function(self, X):
 
         decision = []
+        i = 1
 
         for x in X:
 
@@ -91,6 +92,8 @@ class HierarchicalClassifier:
             # face.compare_show(closestface, measure=True)
 
             print 'face ', str(face), ', closest ', str(closestface)
+            print 'complete ', i*100./len(X), '%'
+            i += 1
 
         return decision
 
