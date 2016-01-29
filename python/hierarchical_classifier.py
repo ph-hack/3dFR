@@ -6,11 +6,12 @@ from faces import Face
 import numpy as np
 import scipy.spatial.distance as dist
 import curve_augmentation as aug
+import logging
 
 
 class HierarchicalClassifier:
 
-    def __init__(self, level=1, n_curves=11, distance=dtw, saliency_folder=None, top=11, augmentations=None):
+    def __init__(self, level=1, n_curves=11, distance=dtw, saliency_folder=None, top=11, augmentations=None, log_file='classifier.log'):
 
         self.level = level
         self.root = HierarchicalNode()
@@ -19,6 +20,8 @@ class HierarchicalClassifier:
         self.top = top
         self.distance = distance
         self.augmentations = augmentations
+
+        logging.basicConfig(format='%(asctime)s %(message)s', filename=log_file, level=logging.DEBUG, filemode='w')
 
     def fit(self, X, y=None):
 
@@ -46,9 +49,13 @@ class HierarchicalClassifier:
         decision = []
         i = 1
 
+        logging.info('Applying classifier\n')
+
         for x in X:
 
             face = Face(x, self.n_curves)
+
+            logging.info('on face {}----------------------------------'.format(face.id))
 
             node_queue = [self.root]
 
@@ -83,16 +90,14 @@ class HierarchicalClassifier:
 
                     node_queue.extend(current_node.children)
 
-            print '\ncandidates: ', candidates
-
             chosen = elect(candidates)
 
             decision.append(chosen[0])
 
             # face.compare_show(closestface, measure=True)
-
-            print 'face ', str(face), ', closest ', str(closestface)
-            print 'complete ', i*100./len(X), '%'
+            logging.info('candidates:\n{}\n'.format(str(candidates)))
+            logging.info('face {}, closest {}\n'.format(str(face), str(closestface)))
+            logging.info('complete {}%\n'.format(i*100./len(X)))
             i += 1
 
         return decision
@@ -309,7 +314,7 @@ class HierarchicalTests(TestCase):
 
         classifier = HierarchicalClassifier(top=6, distance=smoothed_cosine
                                             #, saliency_folder='/home/hick/Documents/Mestrado/Research/Code/Experiments5/saliency/'
-                                            ,augmentations=augmentations)
+                                            )# ,augmentations=augmentations)
 
         classifier.fit(x_train, y_train)
 
