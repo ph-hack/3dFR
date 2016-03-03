@@ -1,8 +1,8 @@
 import pre_processors as pre
-import distances as dist
 import hierarchical_classifier as cla
 import sklearn.metrics as metrics
 from scipy.spatial.distance import cosine
+from curve_augmentation import augment_training_set
 
 pwd = '../../Experiments6/'
 
@@ -11,10 +11,13 @@ train_x, test_x = pre.load_data_split('{}trainingFiles.txt'.format(pwd), '{}test
 train_y = [pre.get_person_id(t) for t in train_x]
 test_y = [pre.get_person_id(t) for t in test_x]
 
-train_x, N = pre.filter_training_set(train_x, train_y)
-print 'train =', train_x[:2]
+print 'train size before: ', len(train_x)
+
+# train_x, N = pre.filter_training_set(train_x, train_y)
+train_x, N = augment_training_set(train_x, train_y, 2)
+# print 'train =', train_x[:2]
 train_x = ['{}lines/{}.lines'.format(pwd, t) for t in train_x]
-print 'train =', train_x[:2]
+# print 'train =', train_x[:2]
 train_y = [pre.get_person_id(t) for t in train_x]
 
 # test_x = pre.filter_testing_set(test_x, set(train_y))

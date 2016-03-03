@@ -82,8 +82,10 @@ class Face:
 
         for c in range(n):
             ax = plt.subplot(2,r,c+1)
-            ax.plot(smooth(self.curves[c], 5), 'b-')
-            ax.plot(smooth(other.curves[c], 5), 'r-')
+            # ax.plot(smooth(self.curves[c], 5), 'b-')
+            ax.plot(self.curves[c], 'b-')
+            # ax.plot(smooth(other.curves[c], 5), 'r-')
+            ax.plot(other.curves[c], 'r-')
 
             if measure:
 

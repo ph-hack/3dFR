@@ -36,12 +36,12 @@ RANGES = {
 
     'noise': {
 
-        'sigma': [0.3, 0.4, 0.5, 0.75, 1., 1.3, 1.5, 1.75, 2., 2.5, 3.],
+        'sigma': [0.3, 0.4, 0.5, 0.6, 0.75, 0.82, 1., 1.3],
         'seed': range(10)
     },
     'rotation': {
 
-        'theta': [3, 4, 5, 6, 7, 8, 10, 12, 15],
+        'theta': [3, 4, 5, 6, 7, 8, 9, 10],
         'center': [0.25, 0.5, 0.75]
     }
 }
@@ -76,15 +76,21 @@ def augment_training_set(train_x, train_y, min_count=-1, transformations_range=R
 
             for i in range(diff_count):
 
-                s = x[random.randint(0, len(x))]
+                s = x[random.randint(0, len(x)-1)]
                 face = Face(train_x[s], 11)
 
-                new_face = augment_faces([face], transformations[i])
+                new_face = augment_faces([face], [transformations[i]])
 
-                new_face_file = '{}{}{}.lines'.format(train_x[s].replace('{}.lines'.format(face.id), ''), face.id, i)
-                new_face[0].save_to_file(new_face_file)
+                print transformations[i]
 
-                new_train_x.append()
+                new_face_file = '{}{}_{}.lines'.format(train_x[s].replace('{}.lines'.format(face.id), ''), face.id, i)
+                new_face[-1].save_to_file(new_face_file)
+
+                new_train_x.append(new_face_file)
+
+            for i in range(len(x)):
+
+                new_train_x.append(train_x[x[i]])
 
     return new_train_x, min_count
 
