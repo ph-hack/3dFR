@@ -7,6 +7,8 @@ import numpy as np
 import scipy.spatial.distance as dist
 import copy as cp
 import matplotlib.pyplot as plt
+import random
+import math
 
 
 def augment_faces(faces, transformations):
@@ -30,6 +32,100 @@ def augment_faces(faces, transformations):
 
     return aug_faces
 
+RANGES = {
+
+    'noise': {
+
+        'sigma': [0.3, 0.4, 0.5, 0.75, 1., 1.3, 1.5, 1.75, 2., 2.5, 3.],
+        'seed': range(10)
+    },
+    'rotation': {
+
+        'theta': [3, 4, 5, 6, 7, 8, 10, 12, 15],
+        'center': [0.25, 0.5, 0.75]
+    }
+}
+
+def augment_training_set(train_x, train_y, min_count=-1, transformations_range=RANGES):
+
+    classes = set(train_y)
+    new_train_x = []
+
+    if min_count == -1:
+
+        min_count = np.min([train_y.count(c) for c in classes])
+
+    train_y = np.array(train_y)
+    train_x = np.array(train_x)
+
+    for c in classes:
+
+        x = np.where(train_y == c)[0]
+
+        if len(x) >= min_count:
+
+            random.seed(5)
+            filtered = [t for t in train_x[random.sample(x, min_count)]]
+            new_train_x.extend(filtered)
+
+        else:
+
+            diff_count = min_count - len(x)
+
+            transformations = get_transformations(transformations_range, diff_count)
+
+            for i in range(diff_count):
+
+                s = x[random.randint(0, len(x))]
+                face = Face(train_x[s], 11)
+
+                new_face = augment_faces([face], transformations[i])
+
+                new_face_file = '{}{}{}.lines'.format(train_x[s].replace('{}.lines'.format(face.id), ''), face.id, i)
+                new_face[0].save_to_file(new_face_file)
+
+                new_train_x.append()
+
+    return new_train_x, min_count
+
+def get_transformations(d, n):
+
+    sigmas = d['noise']['sigma']
+    seeds = d['noise']['seed']
+    thetas = d['rotation']['theta']
+    centers = d['rotation']['center']
+
+    max_transf = len(sigmas) * len(seeds) * len(thetas) * len(centers)
+
+    # print 'max transformations = ', max_transf
+
+    if n > max_transf:
+
+        raise Exception('There is only {} possible combinations and {} were asked!'.format(max_transf, n))
+
+    transformations = []
+
+    chosen = random.sample(range(max_transf), n)
+    # print 'chosen = ', chosen
+
+    for c in chosen:
+
+        sigma = int(math.ceil(c/(len(centers) * len(thetas) * len(seeds)))) % len(sigmas)
+        seed = int(math.ceil(c/(len(centers) * len(thetas)))) % len(seeds)
+        theta = int(math.ceil(c/len(centers))) % len(thetas)
+        center = int(c % len(centers))
+
+        # print 'c =', c
+        # print 'sigma =', sigma, ' seed =', seed, ' theta =', theta, ' center =', center
+
+        t = Transformation()
+        t.add_function('noise', sigma=sigmas[sigma], seed=seeds[seed])
+        t.add_function('rotation', theta=thetas[theta], center=centers[center])
+
+        transformations.append(t)
+
+    return transformations
+
 
 class Transformation:
 
@@ -48,6 +144,10 @@ class Transformation:
             text = ''.join([text, self.names[f], ' ', str(self.params[f]), ' '])
 
         return text
+
+    def __repr__(self):
+
+        return 'Transformation <{}>'.format(str(self))
 
     def __len__(self):
 
@@ -92,7 +192,7 @@ class Transformation:
         return x + noise
 
     @staticmethod
-    def rotation(x, theta=5, unit='degree', center=-1):
+    def rotation(x, theta=5, unit='degree', center=0.5):
 
         if unit == 'degree':
 
@@ -105,9 +205,11 @@ class Transformation:
 
             x = np.vstack((x, np.array(range(0,len(x))))).T
 
-        if center == -1:
+        # if center == -1:
+        #
+        #     center = x.shape[0]/2
 
-            center = x.shape[0]/2
+        center = x.shape[0] * center
 
         x[:,1] = x[:,1] - center
 
@@ -134,7 +236,7 @@ class AugmentationTests(TestCase):
     def test_02_rotation(self):
 
         c1 = read_curves('/home/hick/Documents/Mestrado/Research/Code/Experiments5/from_saliency/04202d350.lines')
-        c2 = Transformation.rotation(c1, 3, 'degree', 30)
+        c2 = Transformation.rotation(c1, 3, 'degree', 0.3)
 
         plt.plot(c1, 'r-')
         plt.plot(c2, 'b-')
@@ -150,11 +252,11 @@ class AugmentationTests(TestCase):
 
         t2 = Transformation()
         t2.add_function('noise')
-        t2.add_function('rotation', theta=4, center=30)
+        t2.add_function('rotation', theta=4, center=0.3)
 
         t3 = Transformation()
         t3.add_function('noise')
-        t3.add_function('rotation', theta=-4, center=70)
+        t3.add_function('rotation', theta=-4, center=0.7)
 
         c2 = t1.apply(c1)
         c3 = t2.apply(c1)
@@ -178,11 +280,11 @@ class AugmentationTests(TestCase):
 
         t2 = Transformation()
         t2.add_function('noise')
-        t2.add_function('rotation', theta=4, center=30)
+        t2.add_function('rotation', theta=4, center=0.3)
 
         t3 = Transformation()
         t3.add_function('noise', sigma=1.3)
-        t3.add_function('rotation', theta=-4, center=70)
+        t3.add_function('rotation', theta=-4, center=0.7)
 
         transformations = [t1, t2, t3]
 
@@ -208,7 +310,7 @@ class AugmentationTests(TestCase):
 
         t2 = Transformation()
         t2.add_function('noise')
-        t2.add_function('rotation', theta=4, center=30)
+        t2.add_function('rotation', theta=4, center=0.3)
 
         print 't1 = ', str(t1)
         print 't2 = ', str(t2)

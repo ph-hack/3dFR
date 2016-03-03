@@ -1,19 +1,17 @@
+from curve_augmentation import get_transformations
 
-from skimage import data, io, filters
-from skimage.feature import CENSURE
-import matplotlib.pyplot as plt
+d = {
 
-image = io.imread("/home/hick/Documents/Mestrado/Research/Code/04201d444.unholed.jpg")
-detector = CENSURE(1, 10, 'DoB', 0.005, 100)
+    'rotation': {
 
-fig, ax = plt.subplots(nrows=1, ncols=1)
-plt.gray()
+        'theta': [3, 5, 7, 10],
+        'center': [-1]
+    },
+    'noise': {
 
-detector.detect(image)
+        'sigma': [0.5, 1., 1.5, 2.],
+        'seed': [1]
+    }
+}
 
-ax.imshow(image)
-ax.axis('off')
-ax.scatter(detector.keypoints[:,1], detector.keypoints[:,0],
-              2 ** detector.scales, facecolors='none', edgecolors='r')
-
-plt.show()
+print get_transformations(d, 16)

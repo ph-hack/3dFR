@@ -92,6 +92,49 @@ class Face:
 
         plt.show()
 
+    def save_to_file(self, file_path):
+
+        try:
+            with open(file_path, 'w') as f:
+
+                curves = self._curves_to_strings()
+
+                f.writelines(curves)
+
+        except Exception as e:
+
+            print 'Error writing the curves into the file: ', file_path, ':\n', e.message
+
+    def _curves_to_strings(self):
+
+        strings = []
+
+        curves = []
+
+        for i in range(self.n_curves):
+
+            curves.append([str(c) for c in self.curves[i]])
+
+        for i in range(self.n_curves-1):
+
+            s = str(curves[i]).replace(', ', ' ')
+            s = s.replace('[', '')
+            s = s.replace(']', '')
+            s = s.replace("'", '')
+
+            s += '\n'
+
+            strings.append(s)
+
+        s = str(curves[-1]).replace(', ', ' ')
+        s = s.replace('[', '')
+        s = s.replace(']', '')
+        s = s.replace("'", '')
+
+        strings.append(s)
+
+        return strings
+
 
 def stats_template():
 
