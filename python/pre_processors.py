@@ -181,10 +181,12 @@ def window(m, d, n):
 
         yield (ds[i], ds[i+1], i)
 
-def saliency(from_folder, distance, to_folder, curves_idx=range(0,11)):
+def saliency(files, distance, to_folder, curves_idx=range(0,11), from_folder=''):
 
-    file_list = os.listdir(from_folder)
-    files = [f for f in file_list if f.endswith('.lines')]
+    if from_folder != '':
+
+        file_list = os.listdir(from_folder)
+        files = [f for f in file_list if f.endswith('.lines')]
 
     curves = []
 
@@ -199,6 +201,8 @@ def saliency(from_folder, distance, to_folder, curves_idx=range(0,11)):
 
     f_classes = np.array([get_person_id(f) for f in files])
     classes = np.array(set(f_classes))
+
+    fi = 1
 
     for f in range(0,len(files)):
 
@@ -235,7 +239,7 @@ def saliency(from_folder, distance, to_folder, curves_idx=range(0,11)):
 
         np.savetxt(''.join([to_folder, 'saliency_', get_sample_id(files[f]), '.txt']), S)
 
-        print 'file ', f
+        print 'progress:', fi*100./len(files), '%, file ', f
 
 
 def remove_non_face(curve):
