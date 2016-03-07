@@ -95,7 +95,7 @@ class HierarchicalClassifier:
             decision.append(chosen[0])
 
             # face.compare_show(closestface, measure=True)
-            logging.info('candidates:\n{}\n'.format(str(candidates)))
+            logging.info('candidates:\n{}\n'.format(str(top_candidates(candidates, 10))))
             logging.info('face {}, closest {}\n'.format(str(face), str(closestface)))
             logging.info('complete {}%\n'.format(i*100./len(X)))
             i += 1
@@ -212,6 +212,25 @@ def elect(candidates):
     v = values.argmin()
 
     return (keys[v], values[v])
+
+def top_candidates(candidates, k=1, order=None):
+
+    keys = np.array(candidates.keys())
+    values = np.array(candidates.values())
+
+    v = values.argsort().tolist()
+
+    if order == 'desc':
+
+        v.reverse()
+
+    d = {}
+
+    for i in v[:k]:
+
+        d[keys[i]] = values[i]
+
+    return d
 
 
 class HierarchicalTests(TestCase):

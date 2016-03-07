@@ -13,11 +13,10 @@ test_y = [pre.get_person_id(t) for t in test_x]
 
 print 'train size before: ', len(train_x)
 
+train_x = ['{}lines/{}.lines'.format(pwd, t) for t in train_x]
 # train_x, N = pre.filter_training_set(train_x, train_y)
 train_x, N = augment_training_set(train_x, train_y, 2)
-# print 'train =', train_x[:2]
-train_x = ['{}lines/{}.lines'.format(pwd, t) for t in train_x]
-# print 'train =', train_x[:2]
+
 train_y = [pre.get_person_id(t) for t in train_x]
 
 # test_x = pre.filter_testing_set(test_x, set(train_y))
@@ -37,7 +36,7 @@ def dtw_gradient(x,y):
 
   return cosine(x,y) #dist.dtw_gradient(x,y)
 
-classifier = cla.HierarchicalClassifier(top=6, distance=dtw_gradient)
+classifier = cla.HierarchicalClassifier(top=6, distance=dtw_gradient, log_file='classifier2.log')
              #saliency_folder='{}saliency/'.format(pwd))
 
 classifier.fit(train_x, train_y)

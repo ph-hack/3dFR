@@ -1,7 +1,7 @@
 from unittest import TestLoader, TextTestRunner
 from unittest.case import TestCase
 import math
-from pre_processors import get_sample_id, get_person_id, read_curves, read_saliency, smooth
+from pre_processors import get_sample_id, get_person_id, read_curves, read_saliency, get_augmentation_id
 from distances import dtw
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,6 +18,7 @@ class Face:
         self.person = get_person_id(fullpath)
         self.metric = metric
         self.top = top
+        self.augmentation = get_augmentation_id(fullpath)
 
         for i in range(0, self.n_curves):
 
@@ -54,11 +55,11 @@ class Face:
 
     def __repr__(self):
 
-        return ''.join(['face ', self.id, ' with ', str(self.n_curves), ' curves'])
+        return ''.join(['face ', self.id, '(', self.augmentation, ') with ', str(self.n_curves), ' curves'])
 
     def __str__(self):
 
-        return self.id
+        return '{}({})'.format(self.id, self.augmentation)
 
     def show(self, n=-1):
 

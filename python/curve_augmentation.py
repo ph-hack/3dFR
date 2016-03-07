@@ -1,10 +1,8 @@
 from unittest import TestLoader, TextTestRunner
 from unittest.case import TestCase
-from pre_processors import get_sample_id, get_person_id, read_curves, read_saliency, smooth
-from distances import dtw, p2p_dist, dtw_gradient
+from pre_processors import read_curves, smooth
 from faces import Face
 import numpy as np
-import scipy.spatial.distance as dist
 import copy as cp
 import matplotlib.pyplot as plt
 import random
@@ -110,7 +108,7 @@ def get_transformations(d, n):
         raise Exception('There is only {} possible combinations and {} were asked!'.format(max_transf, n))
 
     transformations = []
-
+    random.seed(None)
     chosen = random.sample(range(max_transf), n)
     # print 'chosen = ', chosen
 

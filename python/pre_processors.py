@@ -111,6 +111,19 @@ def get_sample_id(file_path):
 
     return name
 
+def get_augmentation_id(file_path):
+
+    m = re.search('[0-9]+d[0-9]+[_]+[0-9]+', file_path)
+
+    if m is None:
+
+        name = 'orig'
+
+    else:
+        name = m.group(0).split('_')[-1]
+
+    return name
+
 def representant_curve(curves, distance='cosine'):
 
     distances = {
