@@ -108,6 +108,12 @@ class Face:
 
             print 'Error writing the curves into the file: ', file_path, ':\n', e.message
 
+    def apply(self, F, **kwargs):
+
+        for c in range(len(self.curves)):
+
+            self.curves[c] = F(self.curves[c], **kwargs)
+
     def _curves_to_strings(self):
 
         strings = []
