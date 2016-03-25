@@ -5,6 +5,7 @@ from pre_processors import get_sample_id, get_person_id, read_curves, read_salie
 from distances import dtw
 import numpy as np
 import matplotlib.pyplot as plt
+import copy as cp
 
 
 class Face:
@@ -44,6 +45,8 @@ class Face:
             errors.append(self.metric(self.curves[c], other.curves[c]))
 
         errors = np.array(errors)
+        errors[np.where(errors < 0.)] = 0.
+
         saliencies = np.array(self.saliencies)
 
         if saliencies.shape[0] > 0:
@@ -143,6 +146,25 @@ class Face:
         strings.append(s)
 
         return strings
+
+    @staticmethod
+    def mean(faces):
+
+        M = cp.deepcopy(faces[0])
+
+        M.id = '{}_mean'.format(M.person)
+
+        for c in range(len(faces[0].curves)):
+
+            curves = np.array([f.curves[c] for f in faces])
+
+            M.curves[c] = curves.mean(axis=0)
+
+        distances = np.array([M - f for f in faces])
+
+        chosen = distances.argmin()
+
+        return cp.deepcopy(faces[chosen])
 
 
 def stats_template():

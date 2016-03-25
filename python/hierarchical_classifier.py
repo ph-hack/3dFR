@@ -30,16 +30,29 @@ class HierarchicalClassifier:
             y = [get_person_id(s) for s in X]
 
         # makes all samples nodes
-        leafs = self._make_nodes(X)
-        last_level = leafs
+        leaves = self._make_nodes(X)
+        last_level = leaves
 
-        for l in range(1, self.level):
+        if self.level >= 2:
+
+            classes = set(y)
+            level1 = []
+
+            for c in classes:
+
+                this_class_samples = [x for x, l in zip(range(len(leaves)), leaves) if l.sample.person == c]
+
+                level1.append(self._clusterize(leaves, this_class_samples))
+
+            last_level = level1
+
+        for l in range(2, self.level):
 
             pass
 
         for n in last_level:
 
-            self.root.add_child(n)
+            self.root.add_child(n, True)
 
     def predict(self, X):
         pass
@@ -55,9 +68,10 @@ class HierarchicalClassifier:
 
             face = Face(x, self.n_curves)
 
-            logging.info('on face {}----------------------------------'.format(face.id))
+            logging.info('on face    [{}]   ---------------------------------------------------------'.format(face.id))
 
             node_queue = [self.root]
+            level_queue = [0]
 
             candidates = {}
             closestface = None
@@ -66,8 +80,12 @@ class HierarchicalClassifier:
             while(len(node_queue) > 0):
 
                 current_node = node_queue.pop(0)
+                current_level = level_queue.pop(0)
+                status = 'Failed!'
 
                 if current_node.isleaf:
+
+                    status = 'Leaf'
 
                     error = current_node.sample - face
 
@@ -89,6 +107,11 @@ class HierarchicalClassifier:
                 elif current_node.test(face):
 
                     node_queue.extend(current_node.children)
+                    level_queue.extend([current_level + 1] * len(current_node.children))
+                    status = 'Passed'
+
+                if status == 'Passed' or status == 'Leaf':
+                    logging.info('{}level {}: {}'.format('  ' * current_level, current_level, current_node))
 
             chosen = elect(candidates)
 
@@ -96,8 +119,8 @@ class HierarchicalClassifier:
 
             # face.compare_show(closestface, measure=True)
             logging.info('candidates:\n{}\n'.format(str(top_candidates(candidates, 10))))
-            logging.info('face {}, closest {}\n'.format(str(face), str(closestface)))
-            logging.info('complete {}%\n'.format(i*100./len(X)))
+            logging.info('face\t{}\n\t\t\tclosest\t{}\n'.format(str(face), str(closestface)))
+            logging.info('----------complete: {}%-------------------------\n'.format(i*100./len(X)))
             i += 1
 
         return decision
@@ -122,6 +145,22 @@ class HierarchicalClassifier:
                 nodes.append(HierarchicalNode(face))
 
         return nodes
+
+    def _clusterize(self, nodes, samples):
+
+        nodes = [n for x, n in zip(range(len(nodes)), nodes) if x in samples]
+
+        faces = [n.sample for n in nodes]
+
+        representant = Face.mean(faces)
+
+        cluster = HierarchicalNode(representant)
+
+        for n in nodes:
+
+            cluster.add_child(n)
+
+        return cluster
 
 
 class HierarchicalNode:
@@ -169,20 +208,40 @@ class HierarchicalNode:
 
         return brothers
 
-    def add_child(self, child):
+    def add_child(self, child, is_root=False):
 
         self.children.append(child)
         child.parent = self
+
+        if not is_root:
+
+            error = self.sample - child.sample
+
+            if len(self.children) == 1:
+
+                self.stats['errors'] = [error]
+                self.stats['mean'] = error
+                self.stats['max'] = error
+                self.stats['var'] = error
+            else:
+
+                self.stats['errors'].append(error)
+                self.stats['mean'] = (self.stats['mean'] + error)/2.
+                self.stats['max'] = max(self.stats['max'], error)
+                self.stats['var'] = np.mean(np.abs(self.stats['mean'] - np.array(self.stats['errors'])))
 
     def test(self, face):
 
         if self.stats['max'] == 0 and self.stats['mean'] == 0 and self.stats['var'] == 0:
 
+            # print 'Stats not computed'
             return True
 
         error = self.sample - face
 
-        return error <= self.stats['max']
+        # print 'max =', self.stats['max'], ', var =', self.stats['var'], ', mean =', self.stats['mean'], ', error =', error
+
+        return error <= self.stats['max'] + self.stats['var']
 
     @property
     def isleaf(self):
@@ -257,15 +316,19 @@ class HierarchicalTests(TestCase):
         self.assertFalse(n1.isleaf)
         self.assertTrue(n1.isroot)
 
-    def est_02_classifier(self):
+    def test_02_classifier(self):
 
         x_train = [
             '/home/hick/Documents/Mestrado/Research/Code/Experiments5/from_saliency/04202d350.lines',
+            '/home/hick/Documents/Mestrado/Research/Code/Experiments5/training/04202d352.lines',
             '/home/hick/Documents/Mestrado/Research/Code/Experiments5/from_saliency/02463d452.lines',
             '/home/hick/Documents/Mestrado/Research/Code/Experiments5/from_saliency/04201d302.lines',
             '/home/hick/Documents/Mestrado/Research/Code/Experiments5/from_saliency/04203d346.lines',
+            '/home/hick/Documents/Mestrado/Research/Code/Experiments5/training/04203d352.lines',
             '/home/hick/Documents/Mestrado/Research/Code/Experiments5/from_saliency/04211d341.lines',
-            '/home/hick/Documents/Mestrado/Research/Code/Experiments5/from_saliency/04213d344.lines'
+            '/home/hick/Documents/Mestrado/Research/Code/Experiments5/from_saliency/04213d344.lines',
+            '/home/hick/Documents/Mestrado/Research/Code/Experiments5/training/04213d338.lines',
+            '/home/hick/Documents/Mestrado/Research/Code/Experiments5/training/04213d282.lines'
         ]
         y_train = ['04202', '02463', '04201', '04203', '04211', '04213']
 
@@ -276,8 +339,8 @@ class HierarchicalTests(TestCase):
 
             return dist.cosine(x,y)
 
-        classifier = HierarchicalClassifier(top=4, distance=smoothed_cosine,
-                                            saliency_folder='/home/hick/Documents/Mestrado/Research/Code/Experiments5/saliency/')
+        classifier = HierarchicalClassifier(level=2, top=4, distance=smoothed_cosine)
+                                            #,saliency_folder='/home/hick/Documents/Mestrado/Research/Code/Experiments5/saliency/')
 
         classifier.fit(x_train, y_train)
 
@@ -297,7 +360,7 @@ class HierarchicalTests(TestCase):
 
         print 'decision = ', decision
 
-    def test_00_classifier_augmentation(self):
+    def est_00_classifier_augmentation(self):
 
         x_train = [
             '/home/hick/Documents/Mestrado/Research/Code/Experiments5/from_saliency/04202d350.lines',
